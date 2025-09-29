@@ -14,13 +14,13 @@ class CommandHandler:
         try:
             text = message.text
             if not text:
-                await message.answer("❌ Используйте: /cve CVE-YYYY-NNNNN")
+                await message.answer("❌ Используйте: /cve CVE-YYYY-NNNNN", disable_web_page_preview=True)
                 return
             
             # Extract CVE ID from command
             cve_patterns = self.bot_service.find_cve_patterns(text)
             if not cve_patterns:
-                await message.answer("❌ CVE ID не найден. Используйте формат: CVE-YYYY-NNNNN")
+                await message.answer("❌ CVE ID не найден. Используйте формат: CVE-YYYY-NNNNN", disable_web_page_preview=True)
                 return
             
             cve_id = cve_patterns[0]  # Take first CVE found
@@ -30,7 +30,7 @@ class CommandHandler:
                 # Send initial message with basic info + loading indicator
                 initial_message = self.bot_service.format_cve_message(cve_data, include_ai=False)
                 loading_message = self.bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
-                sent_message = await message.answer(loading_message, parse_mode="HTML")
+                sent_message = await message.answer(loading_message, parse_mode="HTML", disable_web_page_preview=True)
                 
                 # Generate AI explanation and edit the message
                 try:
@@ -40,32 +40,32 @@ class CommandHandler:
                     updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
                     
                     # Edit the original message
-                    await sent_message.edit_text(updated_message, parse_mode="HTML")
+                    await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
                     
                 except Exception as e:
                     logger.error(f"Error generating AI explanation: {e}")
                     # Edit message to show AI error
                     error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
-                    await sent_message.edit_text(error_message, parse_mode="HTML")
+                    await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
             else:
-                await message.answer(f"❌ CVE {cve_id} не найден в базе данных.")
+                await message.answer(f"❌ CVE {cve_id} не найден в базе данных.", disable_web_page_preview=True)
                 
         except Exception as e:
             logger.error(f"Error handling CVE command: {e}")
-            await message.answer("❌ Ошибка при обработке команды.")
+            await message.answer("❌ Ошибка при обработке команды.", disable_web_page_preview=True)
     
     async def handle_vendor_command(self, message: types.Message):
         """Handle /vendor command"""
         try:
             text = message.text
             if not text:
-                await message.answer("❌ Используйте: /vendor <название вендора/продукта>")
+                await message.answer("❌ Используйте: /vendor <название вендора/продукта>", disable_web_page_preview=True)
                 return
             
             # Extract vendor/product name
             parts = text.split(maxsplit=1)
             if len(parts) < 2:
-                await message.answer("❌ Укажите название вендора/продукта: /vendor <название>")
+                await message.answer("❌ Укажите название вендора/продукта: /vendor <название>", disable_web_page_preview=True)
                 return
             
             vendor_name = parts[1]
@@ -73,13 +73,13 @@ class CommandHandler:
             
             if results:
                 response = self.bot_service.format_vendor_search_results(results)
-                await message.answer(response, parse_mode="Markdown")
+                await message.answer(response, parse_mode="Markdown", disable_web_page_preview=True)
             else:
-                await message.answer(f"❌ CVE для '{vendor_name}' не найдены.")
+                await message.answer(f"❌ CVE для '{vendor_name}' не найдены.", disable_web_page_preview=True)
                 
         except Exception as e:
             logger.error(f"Error handling vendor command: {e}")
-            await message.answer("❌ Ошибка при обработке команды.")
+            await message.answer("❌ Ошибка при обработке команды.", disable_web_page_preview=True)
     
     async def handle_top_command(self, message: types.Message):
         """Handle /top command - show top critical CVEs"""
@@ -102,16 +102,50 @@ class CommandHandler:
                     response += f"   {vendor} {product}\n"
                     response += f"   {description}\\.\\.\\.\n\n"
                 
-                await message.answer(response, parse_mode="Markdown")
+                await message.answer(response, parse_mode="Markdown", disable_web_page_preview=True)
             else:
-                await message.answer("❌ Критические CVE не найдены\\.")
+                await message.answer("❌ Критические CVE не найдены.", disable_web_page_preview=True)
                 
         except Exception as e:
             logger.error(f"Error handling top command: {e}")
-            await message.answer("❌ Ошибка при обработке команды\\.")
+            await message.answer("❌ Ошибка при обработке команды.", disable_web_page_preview=True)
     
     async def handle_start_command(self, message: types.Message):
         """Handle /start command"""
+        # Check if start parameter contains CVE ID
+        if message.text and 'cve_' in message.text:
+            try:
+                cve_id = message.text.split('cve_')[1].split()[0]
+                # Get CVE data and send directly
+                cve_data = self.bot_service.get_cve_info(cve_id)
+                if cve_data:
+                    # Send initial message with basic info + loading indicator
+                    initial_message = self.bot_service.format_cve_message(cve_data, include_ai=False)
+                    loading_message = self.bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
+                    sent_message = await message.answer(loading_message, parse_mode="HTML", disable_web_page_preview=True)
+                    
+                    # Generate AI explanation and edit the message
+                    try:
+                        ai_explanation = await self.bot_service.generate_ai_explanation(cve_data)
+                        
+                        # Create updated message with AI analysis
+                        updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
+                        
+                        # Edit the original message
+                        await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
+                        
+                    except Exception as e:
+                        logger.error(f"Error generating AI explanation: {e}")
+                        # Edit message to show AI error
+                        error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
+                        await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
+                else:
+                    await message.answer(f"❌ CVE {cve_id} не найден в базе данных.", disable_web_page_preview=True)
+                return
+            except Exception as e:
+                logger.error(f"Error processing start parameter: {e}")
+                pass
+        
         welcome_text = """
 🤖 **Добро пожаловать в CVE Info Bot!**
 
@@ -137,7 +171,7 @@ class CommandHandler:
 
 Начните с команды `/help` для получения подробной информации!
         """
-        await message.answer(welcome_text, parse_mode="Markdown")
+        await message.answer(welcome_text, parse_mode="Markdown", disable_web_page_preview=True)
 
     async def handle_help_command(self, message: types.Message):
         """Handle /help command"""
@@ -162,4 +196,4 @@ class CommandHandler:
 **AI-анализ:**
 Бот использует локальную модель Ollama для генерации объяснений и рекомендаций по CVE.
         """
-        await message.answer(help_text, parse_mode="Markdown")
+        await message.answer(help_text, parse_mode="Markdown", disable_web_page_preview=True)

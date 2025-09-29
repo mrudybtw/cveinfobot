@@ -60,6 +60,11 @@ async def handle_help_command(message: types.Message):
 async def handle_channel_post(message: types.Message):
     await channel_handler.handle_channel_post(message)
 
+# Register channel message handler (for messages in channels)
+@dp.message(lambda message: message.chat.type == 'channel')
+async def handle_channel_message(message: types.Message):
+    await channel_handler.handle_channel_post(message)
+
 # Register inline query handler
 @dp.inline_query()
 async def handle_inline_query(query: InlineQuery):
@@ -70,6 +75,10 @@ async def handle_inline_query(query: InlineQuery):
 async def handle_message(message: types.Message):
     """Handle regular messages (not commands)"""
     try:
+        # Skip if this is a channel post (handled by channel_post handler)
+        if message.chat.type in ['channel']:
+            return
+        
         # Check if message contains CVE patterns
         cve_patterns = bot_service.find_cve_patterns(message.text or "")
         
@@ -79,10 +88,10 @@ async def handle_message(message: types.Message):
                 cve_data = bot_service.get_cve_info(cve_id)
                 
                 if cve_data:
-                    # Send initial CVE information + loading indicator
+                    # Send initial CVE information + loading indicator as reply
                     initial_message = bot_service.format_cve_message(cve_data, include_ai=False)
                     loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
-                    sent_message = await message.answer(loading_message, parse_mode="HTML")
+                    sent_message = await message.reply(loading_message, parse_mode="HTML", disable_web_page_preview=True)
                     
                     # Generate AI explanation and edit the message
                     try:
@@ -92,15 +101,15 @@ async def handle_message(message: types.Message):
                         updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
                         
                         # Edit the original message
-                        await sent_message.edit_text(updated_message, parse_mode="HTML")
+                        await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
                         
                     except Exception as e:
                         logger.error(f"Error generating AI explanation for {cve_id}: {e}")
                         # Edit message to show AI error
                         error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
-                        await sent_message.edit_text(error_message, parse_mode="HTML")
+                        await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
                 else:
-                    await message.answer(f"❌ CVE {cve_id} не найден в базе данных.")
+                    await message.reply(f"❌ CVE {cve_id} не найден в базе данных.", disable_web_page_preview=True)
         else:
             # If no CVE patterns found, send help message
             await message.answer(
@@ -112,11 +121,12 @@ async def handle_message(message: types.Message):
                 "• /vendor <название> - Поиск по вендору\n"
                 "• /top - Топ критических CVE\n\n"
                 "Или просто напишите CVE ID в сообщении!",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                disable_web_page_preview=True
             )
     except Exception as e:
         logger.error(f"Error handling message: {e}")
-        await message.answer("❌ Ошибка при обработке сообщения.")
+        await message.answer("❌ Ошибка при обработке сообщения.", disable_web_page_preview=True)
 
 async def main():
     try:

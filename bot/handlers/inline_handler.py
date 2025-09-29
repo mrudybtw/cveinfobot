@@ -20,8 +20,8 @@ class InlineHandler:
                 inline_results = []
                 
                 for cve in results:
-                    # Use simple format for inline (no AI to keep it fast)
-                    message_text = self.bot_service.format_cve_message(cve, include_ai=False)
+                    # Use Markdown format for inline (no AI to keep it fast)
+                    message_text = self.bot_service.format_cve_message_markdown(cve, include_ai=False)
                     inline_results.append(types.InlineQueryResultArticle(
                         id=cve['id'],
                         title=f"🔍 {cve['id']} (CVSS: {cve.get('cvss_v3', 'N/A')})",
@@ -29,6 +29,14 @@ class InlineHandler:
                         input_message_content=types.InputTextMessageContent(
                             message_text=message_text,
                             parse_mode="Markdown"
+                        ),
+                        reply_markup=types.InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [types.InlineKeyboardButton(
+                                    text="📋 Подробнее",
+                                    url=f"https://t.me/cveinfobot?start=cve_{cve['id']}"
+                                )]
+                            ]
                         )
                     ))
                 
@@ -39,8 +47,8 @@ class InlineHandler:
             if query_text.upper().startswith('CVE-'):
                 cve_data = self.bot_service.get_cve_info(query_text)
                 if cve_data:
-                    # Use simple format for inline (no AI to keep it fast)
-                    message_text = self.bot_service.format_cve_message(cve_data, include_ai=False)
+                    # Use Markdown format for inline (no AI to keep it fast)
+                    message_text = self.bot_service.format_cve_message_markdown(cve_data, include_ai=False)
                     result = types.InlineQueryResultArticle(
                         id=cve_data['id'],
                         title=f"🔍 {cve_data['id']} (CVSS: {cve_data.get('cvss_v3', 'N/A')})",
@@ -48,6 +56,14 @@ class InlineHandler:
                         input_message_content=types.InputTextMessageContent(
                             message_text=message_text,
                             parse_mode="Markdown"
+                        ),
+                        reply_markup=types.InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [types.InlineKeyboardButton(
+                                    text="📋 Подробнее",
+                                    url=f"https://t.me/cveinfobot?start=cve_{cve_data['id']}"
+                                )]
+                            ]
                         )
                     )
                     await query.answer([result], cache_time=300)
@@ -61,8 +77,8 @@ class InlineHandler:
             if results:
                 inline_results = []
                 for cve in results:
-                    # Use simple format for inline (no AI to keep it fast)
-                    message_text = self.bot_service.format_cve_message(cve, include_ai=False)
+                    # Use Markdown format for inline (no AI to keep it fast)
+                    message_text = self.bot_service.format_cve_message_markdown(cve, include_ai=False)
                     inline_results.append(types.InlineQueryResultArticle(
                         id=cve['id'],
                         title=f"🔍 {cve['id']} (CVSS: {cve.get('cvss_v3', 'N/A')})",
@@ -70,6 +86,14 @@ class InlineHandler:
                         input_message_content=types.InputTextMessageContent(
                             message_text=message_text,
                             parse_mode="Markdown"
+                        ),
+                        reply_markup=types.InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [types.InlineKeyboardButton(
+                                    text="📋 Подробнее",
+                                    url=f"https://t.me/cveinfobot?start=cve_{cve['id']}"
+                                )]
+                            ]
                         )
                     ))
                 

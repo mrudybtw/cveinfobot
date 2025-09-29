@@ -175,11 +175,16 @@ class BotService:
         product = cve_data.get('product', 'Unknown')
         published_date = cve_data.get('published_date', 'Unknown')
 
-        # Clean text for HTML - minimal escaping
+        # Clean text for HTML - remove HTML tags and escape special characters
         def clean_html_text(text):
             if not text:
                 return text
             text = str(text)
+            # Remove HTML tags
+            import re
+            text = re.sub(r'<[^>]+>', '', text)
+            # Clean up extra whitespace
+            text = re.sub(r'\s+', ' ', text).strip()
             # Only escape HTML special characters
             text = text.replace('&', '&amp;')
             text = text.replace('<', '&lt;')
@@ -241,6 +246,80 @@ class BotService:
 
         return message
     
+    def format_cve_message_markdown(self, cve_data: Dict, include_ai: bool = True) -> str:
+        """Format CVE information for Telegram message using Markdown"""
+        cve_id = cve_data.get('id', 'Unknown')
+        description = cve_data.get('description', 'No description available')
+        cvss_v3 = cve_data.get('cvss_v3', 'N/A')
+        vendor = cve_data.get('vendor', 'Unknown')
+        product = cve_data.get('product', 'Unknown')
+        published_date = cve_data.get('published_date', 'Unknown')
+
+        # Clean text for Markdown - minimal escaping
+        def clean_markdown_text(text):
+            if not text:
+                return text
+            text = str(text)
+            # Only escape the most problematic characters
+            text = text.replace('\\', '\\\\')  # Escape backslashes first
+            text = text.replace('_', '\\_')    # Escape underscores
+            text = text.replace('*', '\\*')    # Escape asterisks
+            text = text.replace('[', '\\[')    # Escape brackets
+            text = text.replace(']', '\\]')    # Escape brackets
+            return text
+
+        # Clean and truncate description
+        clean_description = description[:300]  # Shorter for inline
+        if len(description) > 300:
+            clean_description += '...'
+
+        # Determine severity emoji and text
+        if cvss_v3 and isinstance(cvss_v3, (int, float)):
+            if cvss_v3 >= 9.0:
+                severity_emoji = "🔴"
+                severity_text = "КРИТИЧЕСКИЙ"
+            elif cvss_v3 >= 7.0:
+                severity_emoji = "🟠"
+                severity_text = "ВЫСОКИЙ"
+            elif cvss_v3 >= 4.0:
+                severity_emoji = "🟡"
+                severity_text = "СРЕДНИЙ"
+            else:
+                severity_emoji = "🟢"
+                severity_text = "НИЗКИЙ"
+        else:
+            severity_emoji = "⚪"
+            severity_text = "НЕИЗВЕСТНО"
+
+        # Format date nicely
+        try:
+            from datetime import datetime
+            if published_date and published_date != 'Unknown':
+                dt = datetime.fromisoformat(published_date.replace('Z', '+00:00'))
+                formatted_date = dt.strftime('%d.%m.%Y')
+            else:
+                formatted_date = published_date
+        except:
+            formatted_date = published_date
+
+        message = f"""{severity_emoji} *{cve_id}* - {severity_text}
+
+*Продукт:* {clean_markdown_text(vendor)} {clean_markdown_text(product)}
+*CVSS v3:* {cvss_v3}
+*Дата:* {clean_markdown_text(formatted_date)}
+
+*Описание:*
+{clean_markdown_text(clean_description)}
+
+*Ссылки:*
+• [NVD](https://nvd.nist.gov/vuln/detail/{cve_id})
+• [CVE Details](https://www.cvedetails.com/cve/{cve_id}/)"""
+
+        if include_ai:
+            message += "\n\n🤖 *AI\\-анализ:*\n_Генерация объяснения\\.\\.\\._"
+
+        return message
+    
     def get_loading_animation(self, step: int = 0) -> str:
         """Get loading animation step"""
         animations = [
@@ -263,7 +342,7 @@ class BotService:
     def format_vendor_search_results(self, results: List[Dict]) -> str:
         """Format vendor search results for Telegram message"""
         if not results:
-            return "❌ CVE для указанного вендора/продукта не найдены\\."
+            return "❌ CVE для указанного вендора/продукта не найдены."
         
         message = f"🔍 *Найдено {len(results)} CVE:*\n\n"
         
@@ -271,18 +350,38 @@ class BotService:
             cvss = cve.get('cvss_v3', 'N/A')
             severity_emoji = "🔴" if cvss and cvss >= 9.0 else "🟠" if cvss and cvss >= 7.0 else "🟡" if cvss and cvss >= 4.0 else "🟢"
             
-            # Escape special characters
-            cve_id = cve['id'].replace('_', '\\_').replace('*', '\\*')
-            vendor = cve.get('vendor', 'Unknown').replace('_', '\\_').replace('*', '\\*')
-            product = cve.get('product', 'Unknown').replace('_', '\\_').replace('*', '\\*')
-            description = cve.get('description', 'No description')[:100].replace('_', '\\_').replace('*', '\\*')
+            # Clean description - remove HTML tags
+            import re
+            description = cve.get('description', 'No description')
+            clean_description = re.sub(r'<[^>]+>', '', description)
+            clean_description = re.sub(r'\s+', ' ', clean_description).strip()
+            clean_description = clean_description[:100]
+            if len(clean_description) > 100:
+                clean_description += "..."
             
-            message += f"{i}\\. {severity_emoji} *{cve_id}* \\(CVSS: {cvss}\\)\n"
+            # Minimal escaping for Markdown
+            def clean_text(text):
+                if not text:
+                    return text
+                text = str(text)
+                text = text.replace('\\', '\\\\')
+                text = text.replace('_', '\\_')
+                text = text.replace('*', '\\*')
+                text = text.replace('[', '\\[')
+                text = text.replace(']', '\\]')
+                return text
+            
+            cve_id = clean_text(cve['id'])
+            vendor = clean_text(cve.get('vendor', 'Unknown'))
+            product = clean_text(cve.get('product', 'Unknown'))
+            clean_desc = clean_text(clean_description)
+            
+            message += f"{i}. {severity_emoji} *{cve_id}* (CVSS: {cvss})\n"
             message += f"   {vendor} {product}\n"
-            message += f"   {description}\\.\\.\\.\n\n"
+            message += f"   {clean_desc}\n\n"
         
         if len(results) > 5:
-            message += f"\\.\\.\\. и еще {len(results) - 5} CVE"
+            message += f"... и еще {len(results) - 5} CVE"
         
         return message
     

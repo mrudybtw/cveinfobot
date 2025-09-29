@@ -19,6 +19,7 @@ A comprehensive Telegram bot that provides real-time CVE (Common Vulnerabilities
 - **311,921+ CVE Database** - Complete vulnerability database from NVD
 - **AI-Powered Analysis** - Intelligent vulnerability assessment using LLaMA 3.1 8B
 - **Real-time Monitoring** - Automatic CVE detection in Telegram channels
+- **Channel Comments** - Automatic commenting on channel posts with CVE analysis
 - **Inline Search** - Quick vulnerability lookup via `@cveinfobot`
 - **Command Interface** - Rich command system for detailed queries
 
@@ -122,8 +123,13 @@ Sudo before 1.9.17p1 allows local users to obtain root access...
 ```
 Shows recent Microsoft vulnerabilities with CVSS scores and descriptions.
 
-### Channel Monitoring
-The bot automatically detects CVE patterns in channel messages and responds with detailed analysis.
+### Channel Monitoring & Comments
+The bot automatically detects CVE patterns in channel messages and responds with detailed analysis:
+
+- **Discussion Group Comments** - When channel has linked discussion group, bot posts comments there
+- **Channel Replies** - When no discussion group exists, bot replies directly in the channel
+- **AI Analysis** - Each comment includes full CVE details with AI-powered risk assessment
+- **Multiple CVE Support** - Handles multiple CVE IDs in a single post
 
 ---
 
@@ -199,6 +205,7 @@ UPDATE_INTERVAL=3600
 2. Enable inline mode: `/setinline`
 3. Set inline placeholder: `/setinlinefeedback`
 4. Add bot to channels as administrator
+5. For channel comments: Create discussion group and link it to your channel
 
 ---
 
@@ -274,7 +281,7 @@ cveinfobot/
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the BEER-WARE LICENSE - see the [LICENSE](LICENSE) file for details.
 
 ---
 
@@ -317,6 +324,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **База данных 311,921+ CVE** - Полная база уязвимостей из NVD
 - **ИИ-анализ** - Интеллектуальная оценка уязвимостей с использованием LLaMA 3.1 8B
 - **Мониторинг в реальном времени** - Автоматическое обнаружение CVE в каналах Telegram
+- **Комментирование в каналах** - Автоматическое комментирование постов с анализом CVE
 - **Инлайн-поиск** - Быстрый поиск уязвимостей через `@cveinfobot`
 - **Командный интерфейс** - Богатая система команд для детальных запросов
 
@@ -399,8 +407,13 @@ Sudo before 1.9.17p1 allows local users to obtain root access...
 ```
 Показывает недавние уязвимости Microsoft с оценками CVSS и описаниями.
 
-### Мониторинг каналов
-Бот автоматически обнаруживает паттерны CVE в сообщениях каналов и отвечает детальным анализом.
+### Мониторинг каналов и комментирование
+Бот автоматически обнаруживает паттерны CVE в сообщениях каналов и отвечает детальным анализом:
+
+- **Комментарии в группе обсуждений** - Когда канал связан с группой обсуждений, бот оставляет комментарии там
+- **Ответы в канале** - Когда нет группы обсуждений, бот отвечает прямо в канале
+- **ИИ-анализ** - Каждый комментарий включает полные детали CVE с оценкой рисков на основе ИИ
+- **Поддержка множественных CVE** - Обрабатывает несколько CVE ID в одном посте
 
 ## 🏗️ Архитектура
 
@@ -472,6 +485,7 @@ UPDATE_INTERVAL=3600
 2. Включите инлайн-режим: `/setinline`
 3. Установите инлайн-заглушку: `/setinlinefeedback`
 4. Добавьте бота в каналы как администратора
+5. Для комментирования в каналах: Создайте группу обсуждений и свяжите её с каналом
 
 ## 🧪 Тестирование
 
