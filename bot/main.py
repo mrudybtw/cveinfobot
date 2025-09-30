@@ -1,21 +1,21 @@
 import asyncio
-import os
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineQuery, CallbackQuery
-from dotenv import load_dotenv
 from bot.services.bot_service import BotService
 from bot.handlers.command_handler import CommandHandler
 from bot.handlers.channel_handler import ChannelHandler
 from bot.handlers.inline_handler import InlineHandler
 from bot.utils.logging_config import get_logger
+from config import Config
 
 # Получаем логгер
 logger = get_logger(__name__)
 
-load_dotenv()
-API_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Валидируем конфигурацию
+Config.validate()
+API_TOKEN = Config.get_telegram_token()
 
 if not API_TOKEN:
     logger.error("TELEGRAM_TOKEN not found in environment variables")

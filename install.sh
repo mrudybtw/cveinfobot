@@ -98,29 +98,40 @@ create_env_file() {
     
     if [ ! -f ".env" ]; then
         cat > .env << EOF
-# Telegram Bot Configuration
+# ===========================================
+# CVE Info Bot Configuration
+# ===========================================
+# ВАЖНО: Заполните чувствительные данные!
+
+# Telegram Bot Token (ОБЯЗАТЕЛЬНО)
 TELEGRAM_TOKEN=your_telegram_bot_token_here
 
-# Ollama Configuration
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
+# NVD API Key (опционально, для увеличения лимитов)
+NVD_API_KEY=your_nvd_api_key_here_optional
 
-# Database Configuration
+# ===========================================
+# Настройки приложения (можно оставить по умолчанию)
+# ===========================================
+
+# Database
 DB_PATH=db/cve.db
 
-# NVD API Configuration
-NVD_API_URL=https://services.nvd.nist.gov/rest/json/cves/2.0
-NVD_API_KEY=your_nvd_api_key_here_optional
-NVD_UPDATE_INTERVAL=3600
-
-# Logging Configuration
+# Logging
 LOG_LEVEL=INFO
 LOG_DIR=logs
 LOG_MAX_SIZE=10485760
 LOG_BACKUP_COUNT=5
 TIMEZONE=UTC+3
 
-# EPSS Configuration
+# NVD API
+NVD_API_URL=https://services.nvd.nist.gov/rest/json/cves/2.0
+NVD_UPDATE_INTERVAL=3600
+
+# Ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+
+# EPSS
 EPSS_API_URL=https://api.first.org/data/v1/epss
 EOF
         print_success "Файл .env создан"

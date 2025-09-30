@@ -94,8 +94,8 @@ install.bat
    ```bash
    # Create .env file with your configuration
    echo "TELEGRAM_TOKEN=your_bot_token_here" > .env
-   echo "OLLAMA_BASE_URL=http://localhost:11434" >> .env
-   echo "OLLAMA_MODEL=llama3.1:8b" >> .env
+   # Optional: Add NVD API key for higher rate limits
+   echo "NVD_API_KEY=your_nvd_api_key_here" >> .env
    ```
 
 4. **Start the bot** (database initializes automatically)
@@ -127,6 +127,40 @@ pkill -f run_bot.py
 # Check if running
 ps aux | grep run_bot.py
 ```
+
+---
+
+## ⚙️ Configuration
+
+### 🔐 Sensitive Data (.env file)
+```bash
+# Required
+TELEGRAM_TOKEN=your_bot_token_here
+
+# Optional (for higher NVD API limits)
+NVD_API_KEY=your_nvd_api_key_here
+```
+
+### 🔧 Application Settings (config.py)
+```python
+# Database
+DB_PATH = "db/cve.db"
+
+# Logging
+LOG_LEVEL = "INFO"
+LOG_DIR = "logs"
+TIMEZONE = "UTC+3"
+
+# API Settings
+NVD_UPDATE_INTERVAL = 3600  # 1 hour
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.1:8b"
+```
+
+### 📝 Configuration Architecture
+- **`.env`** - Sensitive data (tokens, API keys)
+- **`config.py`** - Application settings with defaults
+- **Environment variables** - Override defaults when needed
 
 ---
 

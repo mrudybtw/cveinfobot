@@ -60,29 +60,40 @@ REM Создание .env файла
 echo [INFO] Создание файла конфигурации...
 if not exist .env (
     (
-        echo # Telegram Bot Configuration
+        echo # ===========================================
+        echo # CVE Info Bot Configuration
+        echo # ===========================================
+        echo # ВАЖНО: Заполните чувствительные данные!
+        echo.
+        echo # Telegram Bot Token (ОБЯЗАТЕЛЬНО)
         echo TELEGRAM_TOKEN=your_telegram_bot_token_here
         echo.
-        echo # Ollama Configuration
-        echo OLLAMA_BASE_URL=http://localhost:11434
-        echo OLLAMA_MODEL=llama3.1:8b
+        echo # NVD API Key (опционально, для увеличения лимитов)
+        echo NVD_API_KEY=your_nvd_api_key_here_optional
         echo.
-        echo # Database Configuration
+        echo # ===========================================
+        echo # Настройки приложения (можно оставить по умолчанию)
+        echo # ===========================================
+        echo.
+        echo # Database
         echo DB_PATH=db/cve.db
         echo.
-        echo # NVD API Configuration
-        echo NVD_API_URL=https://services.nvd.nist.gov/rest/json/cves/2.0
-        echo NVD_API_KEY=your_nvd_api_key_here_optional
-        echo NVD_UPDATE_INTERVAL=3600
-        echo.
-        echo # Logging Configuration
+        echo # Logging
         echo LOG_LEVEL=INFO
         echo LOG_DIR=logs
         echo LOG_MAX_SIZE=10485760
         echo LOG_BACKUP_COUNT=5
         echo TIMEZONE=UTC+3
         echo.
-        echo # EPSS Configuration
+        echo # NVD API
+        echo NVD_API_URL=https://services.nvd.nist.gov/rest/json/cves/2.0
+        echo NVD_UPDATE_INTERVAL=3600
+        echo.
+        echo # Ollama
+        echo OLLAMA_BASE_URL=http://localhost:11434
+        echo OLLAMA_MODEL=llama3.1:8b
+        echo.
+        echo # EPSS
         echo EPSS_API_URL=https://api.first.org/data/v1/epss
     ) > .env
     echo [SUCCESS] Файл .env создан

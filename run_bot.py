@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # Импортируем настройку логирования
 from bot.utils.logging_config import setup_logging, get_logger, log_system_info
+from config import Config
 
 # Настройка логирования с ротацией и UTC+3
 setup_logging()
@@ -178,7 +179,7 @@ class BotManager:
         """Периодическое обновление CVE каждый час"""
         while self.running:
             try:
-                await asyncio.sleep(3600)  # Ждем 1 час
+                await asyncio.sleep(Config.NVD_UPDATE_INTERVAL)  # Ждем согласно конфигурации
                 if self.running:
                     await self.update_cve_data()
             except Exception as e:

@@ -22,14 +22,23 @@ class UTCPlus3Formatter(logging.Formatter):
         else:
             return dt.strftime('%Y-%m-%d %H:%M:%S %Z')
 
-def setup_logging(log_level=logging.INFO, log_dir="logs"):
+def setup_logging(log_level=None, log_dir=None):
     """
     Настройка логирования с ротацией файлов и временем UTC+3
     
     Args:
-        log_level: Уровень логирования (по умолчанию INFO)
-        log_dir: Директория для логов (по умолчанию "logs")
+        log_level: Уровень логирования (по умолчанию из Config)
+        log_dir: Директория для логов (по умолчанию из Config)
     """
+    # Импортируем Config здесь, чтобы избежать циклических импортов
+    from config import Config
+    
+    # Используем значения по умолчанию из Config
+    if log_level is None:
+        log_level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
+    if log_dir is None:
+        log_dir = Config.LOG_DIR
+    
     # Создаем директорию для логов
     log_path = Path(log_dir)
     log_path.mkdir(exist_ok=True)

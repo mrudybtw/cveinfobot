@@ -3,10 +3,11 @@ import aiohttp
 import sqlite3
 import os
 from datetime import datetime
+from config import Config
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '../../db/cve.db')
-NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-NVD_API_KEY = os.getenv("NVD_API_KEY")  # Опциональный API ключ для NVD
+DB_PATH = Config.DB_PATH
+NVD_API_URL = Config.NVD_API_URL
+NVD_API_KEY = Config.get_nvd_api_key()  # Опциональный API ключ для NVD
 
 async def fetch_cve(start_index=0, results_per_page=2000):
     params = {
