@@ -357,7 +357,14 @@ class CommandHandler:
             last_cve = cursor.fetchone()
             
             # Самый новый CVE ID (по номеру)
-            cursor.execute("SELECT id FROM cve ORDER BY CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC, CAST(SUBSTR(id, 10) AS INTEGER) DESC LIMIT 1")
+            cursor.execute("""
+                SELECT id FROM cve 
+                ORDER BY 
+                    CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC,
+                    LENGTH(SUBSTR(id, 10)) DESC,
+                    CAST(SUBSTR(id, 10) AS INTEGER) DESC
+                LIMIT 1
+            """)
             newest_cve = cursor.fetchone()
             
             # CVE за последние 24 часа
@@ -407,8 +414,8 @@ class CommandHandler:
 
 **Последние обновления:**
 • Последнее обновление: {last_update_str}
-• Последний CVE (по дате): {last_cve[0] if last_cve else 'Неизвестно'}
-• Самый новый CVE ID: {newest_cve[0] if newest_cve else 'Неизвестно'}
+• Последний CVE (по дате публикации): {last_cve[0] if last_cve else 'Неизвестно'}
+• Самый новый CVE ID (по номеру): {newest_cve[0] if newest_cve else 'Неизвестно'}
 • За 24 часа: {last_24h:,} новых CVE
 • За неделю: {last_week:,} новых CVE
             """
@@ -531,7 +538,14 @@ class CommandHandler:
                     cursor.execute("SELECT MAX(published_date) FROM cve")
                     last_update = cursor.fetchone()[0]
                 
-                cursor.execute("SELECT id FROM cve ORDER BY CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC, CAST(SUBSTR(id, 10) AS INTEGER) DESC LIMIT 1")
+                cursor.execute("""
+                    SELECT id FROM cve 
+                    ORDER BY 
+                        CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC,
+                        LENGTH(SUBSTR(id, 10)) DESC,
+                        CAST(SUBSTR(id, 10) AS INTEGER) DESC
+                    LIMIT 1
+                """)
                 newest_cve = cursor.fetchone()
                 
                 conn.close()
@@ -558,7 +572,7 @@ class CommandHandler:
 📊 <b>Обновленная статистика:</b>
 • Всего CVE: {total_cve:,}
 • Последнее обновление: {last_update_str}
-• Самый новый CVE: {newest_cve[0] if newest_cve else 'Неизвестно'}
+• Самый новый CVE ID: {newest_cve[0] if newest_cve else 'Неизвестно'}
 
 ⏰ <b>Следующее ручное обновление:</b> через 15 минут
 🔄 <b>Автоматическое обновление:</b> каждый час
