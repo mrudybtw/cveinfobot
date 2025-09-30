@@ -342,9 +342,15 @@ class CommandHandler:
             cursor.execute("SELECT AVG(epss) FROM cve WHERE epss IS NOT NULL")
             avg_epss = cursor.fetchone()[0]
             
-            # Последнее обновление
-            cursor.execute("SELECT MAX(published_date) FROM cve")
-            last_update = cursor.fetchone()[0]
+            # Последнее обновление базы данных
+            cursor.execute("SELECT value FROM db_metadata WHERE key = 'last_db_update'")
+            result = cursor.fetchone()
+            if result and result[0]:
+                last_update = result[0]
+            else:
+                # Fallback: используем MAX(published_date) если метаданных нет
+                cursor.execute("SELECT MAX(published_date) FROM cve")
+                last_update = cursor.fetchone()[0]
             
             # Последний CVE (по дате публикации)
             cursor.execute("SELECT id, published_date FROM cve ORDER BY published_date DESC LIMIT 1")
@@ -515,8 +521,15 @@ class CommandHandler:
                 cursor.execute("SELECT COUNT(*) FROM cve")
                 total_cve = cursor.fetchone()[0]
                 
-                cursor.execute("SELECT MAX(published_date) FROM cve")
-                last_update = cursor.fetchone()[0]
+                # Последнее обновление базы данных
+                cursor.execute("SELECT value FROM db_metadata WHERE key = 'last_db_update'")
+                result = cursor.fetchone()
+                if result and result[0]:
+                    last_update = result[0]
+                else:
+                    # Fallback: используем MAX(published_date) если метаданных нет
+                    cursor.execute("SELECT MAX(published_date) FROM cve")
+                    last_update = cursor.fetchone()[0]
                 
                 cursor.execute("SELECT id FROM cve ORDER BY CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC, CAST(SUBSTR(id, 10) AS INTEGER) DESC LIMIT 1")
                 newest_cve = cursor.fetchone()

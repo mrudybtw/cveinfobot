@@ -46,6 +46,14 @@ def save_cve_to_db(cve_list):
             epss REAL
         )
     """)
+    
+    # Создаем таблицу метаданных если её нет
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS db_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
     for item in cve_list:
         cve_id = item['cve']['id']
         published = item['cve']['published']
@@ -82,14 +90,32 @@ def save_cve_to_db(cve_list):
             INSERT OR REPLACE INTO cve (id, description, cvss_v3, published_date, last_modified, vendor, product, epss)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (cve_id, desc, cvss_v3, published, last_modified, vendor, product, None))
+    
+    # Обновляем время последнего обновления базы данных
+    current_time = datetime.utcnow().isoformat() + 'Z'
+    c.execute("""
+        INSERT OR REPLACE INTO db_metadata (key, value) 
+        VALUES ('last_db_update', ?)
+    """, (current_time,))
+    
     conn.commit()
     conn.close()
 
 def get_last_update_time():
-    """Получить время последнего обновления из базы данных"""
+    """Получить время последнего обновления базы данных"""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        
+        # Сначала пытаемся получить время из метаданных
+        cursor.execute("SELECT value FROM db_metadata WHERE key = 'last_db_update'")
+        result = cursor.fetchone()
+        
+        if result and result[0]:
+            conn.close()
+            return result[0]
+        
+        # Fallback: используем MAX(last_modified) из CVE
         cursor.execute("SELECT MAX(last_modified) FROM cve")
         result = cursor.fetchone()
         conn.close()
