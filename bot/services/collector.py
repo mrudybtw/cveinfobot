@@ -9,6 +9,10 @@ DB_PATH = Config.DB_PATH
 NVD_API_URL = Config.NVD_API_URL
 NVD_API_KEY = Config.get_nvd_api_key()  # Опциональный API ключ для NVD
 
+# Проверяем, что API ключ не является заглушкой
+if NVD_API_KEY and NVD_API_KEY.startswith('your_'):
+    NVD_API_KEY = ""  # Убираем недействительный ключ
+
 async def fetch_cve(start_index=0, results_per_page=2000):
     params = {
         "startIndex": start_index,
@@ -175,46 +179,29 @@ async def load_incremental_cves():
         
         print(f"Last update time: {last_update}")
         
-        # Загружаем CVE, измененные после последнего обновления
-        # NVD API поддерживает фильтрацию по дате изменения
-        from datetime import datetime, timedelta
+        # NVD API 2.0 не поддерживает фильтрацию по дате изменения
+        # Поэтому загружаем последние CVE и проверяем их в базе
         
-        # Форматируем дату для NVD API
-        last_update_dt = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
-        start_date = last_update_dt.strftime('%Y-%m-%dT%H:%M:%S.000')
+        print("Loading recent CVEs for update...")
         
-        print(f"Loading CVEs modified after: {start_date}")
-        
-        # Загружаем постранично с фильтром по дате
+        # Загружаем последние CVE (последние 1000)
         all_vulnerabilities = []
-        page_size = 2000
+        page_size = 1000
         start_index = 0
         
-        while True:
-            print(f"Loading page starting from index {start_index}...")
+        try:
+            data = await fetch_cve(start_index=start_index, results_per_page=page_size)
+            vulnerabilities = data.get('vulnerabilities', [])
             
-            try:
-                # Используем параметр lastModStartDate для фильтрации
-                data = await fetch_cve_with_date_filter(start_index=start_index, results_per_page=page_size, last_mod_start_date=start_date)
-                vulnerabilities = data.get('vulnerabilities', [])
-                
-                if not vulnerabilities:
-                    print("No more CVEs found")
-                    break
-                
+            if vulnerabilities:
                 all_vulnerabilities.extend(vulnerabilities)
-                print(f"  ✅ Loaded {len(vulnerabilities)} CVEs from this page")
+                print(f"  ✅ Loaded {len(vulnerabilities)} recent CVEs")
+            else:
+                print("  ⚠️  No recent CVEs found")
                 
-                # Если получили меньше чем page_size, значит это последняя страница
-                if len(vulnerabilities) < page_size:
-                    break
-                
-                start_index += page_size
-                await asyncio.sleep(0.6)
-                
-            except Exception as e:
-                print(f"  ❌ Error loading page: {e}")
-                break
+        except Exception as e:
+            print(f"  ❌ Error loading recent CVEs: {e}")
+            return False
         
         if all_vulnerabilities:
             print(f"\n💾 Saving {len(all_vulnerabilities)} new/updated CVEs to database...")
@@ -229,27 +216,6 @@ async def load_incremental_cves():
         print(f"❌ Error in incremental update: {e}")
         return False
 
-async def fetch_cve_with_date_filter(start_index=0, results_per_page=2000, last_mod_start_date=None):
-    """Загрузить CVE с фильтром по дате изменения"""
-    params = {
-        "startIndex": start_index,
-        "resultsPerPage": results_per_page
-    }
-    
-    if last_mod_start_date:
-        params["lastModStartDate"] = last_mod_start_date
-    
-    headers = {}
-    if NVD_API_KEY:
-        headers["apiKey"] = NVD_API_KEY
-    
-    async with aiohttp.ClientSession() as session:
-        async with session.get(NVD_API_URL, params=params, headers=headers) as resp:
-            if resp.status != 200:
-                error_text = await resp.text()
-                raise Exception(f"HTTP {resp.status}: {error_text}")
-            data = await resp.json()
-            return data
 
 async def update_cve_db():
     """Простое инкрементное обновление CVE базы данных"""
