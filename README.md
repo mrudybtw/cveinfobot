@@ -49,13 +49,13 @@ A comprehensive Telegram bot that provides real-time CVE (Common Vulnerabilities
 ### Prerequisites
 - Python 3.8+
 - Telegram Bot Token (from [@BotFather](https://t.me/botfather))
-- Ollama (optional, for AI analysis)
+- Internet connection (for CVE data and AI model download)
 
 ### 🎯 One-Click Installation
 
 #### Linux/macOS
 ```bash
-# Clone and install
+# Clone and install (includes Ollama + LLaMA model)
 git clone https://github.com/mrudybtw/cveinfobot.git
 cd cveinfobot
 chmod +x install.sh
@@ -64,11 +64,18 @@ chmod +x install.sh
 
 #### Windows
 ```cmd
-# Clone and install
+# Clone and install (includes Ollama + LLaMA model)
 git clone https://github.com/mrudybtw/cveinfobot.git
 cd cveinfobot
 install.bat
 ```
+
+> **Note**: Install scripts automatically:
+> - Install Python dependencies
+> - Install and configure Ollama
+> - Download LLaMA 3.1 8B model (~4.7GB)
+> - Set up logging and database
+> - Create systemd service (Linux)
 
 ### 📝 Manual Installation
 

@@ -139,9 +139,96 @@ create_directories() {
     print_success "Директории созданы"
 }
 
+# Установка Ollama
+install_ollama() {
+    print_status "Установка Ollama..."
+    
+    if command -v ollama &> /dev/null; then
+        print_success "Ollama уже установлен"
+        return 0
+    fi
+    
+    print_status "Скачивание и установка Ollama..."
+    
+    if [[ "$OS" == "linux" ]]; then
+        # Linux установка
+        curl -fsSL https://ollama.ai/install.sh | sh
+        if [ $? -eq 0 ]; then
+            print_success "Ollama установлен для Linux"
+        else
+            print_error "Ошибка установки Ollama для Linux"
+            return 1
+        fi
+    elif [[ "$OS" == "macos" ]]; then
+        # macOS установка через Homebrew
+        if command -v brew &> /dev/null; then
+            brew install ollama
+            if [ $? -eq 0 ]; then
+                print_success "Ollama установлен через Homebrew"
+            else
+                print_error "Ошибка установки Ollama через Homebrew"
+                return 1
+            fi
+        else
+            print_warning "Homebrew не найден. Установите Ollama вручную: https://ollama.ai/download"
+            return 1
+        fi
+    fi
+}
+
+# Запуск Ollama сервера
+start_ollama() {
+    print_status "Запуск Ollama сервера..."
+    
+    # Проверяем, запущен ли уже сервер
+    if curl -s http://localhost:11434/api/tags &> /dev/null; then
+        print_success "Ollama сервер уже запущен"
+        return 0
+    fi
+    
+    # Запускаем сервер в фоне
+    nohup ollama serve > logs/ollama.log 2>&1 &
+    OLLAMA_PID=$!
+    
+    # Ждем запуска сервера
+    print_status "Ожидание запуска Ollama сервера..."
+    for i in {1..30}; do
+        if curl -s http://localhost:11434/api/tags &> /dev/null; then
+            print_success "Ollama сервер запущен (PID: $OLLAMA_PID)"
+            echo $OLLAMA_PID > logs/ollama.pid
+            return 0
+        fi
+        sleep 2
+    done
+    
+    print_error "Не удалось запустить Ollama сервер"
+    return 1
+}
+
+# Скачивание модели LLaMA
+download_llama_model() {
+    print_status "Скачивание модели LLaMA 3.1 8B..."
+    
+    # Проверяем, есть ли уже модель
+    if curl -s http://localhost:11434/api/tags | grep -q "llama3.1:8b"; then
+        print_success "Модель LLaMA 3.1 8B уже загружена"
+        return 0
+    fi
+    
+    print_status "Скачивание модели (это может занять несколько минут)..."
+    ollama pull llama3.1:8b
+    
+    if [ $? -eq 0 ]; then
+        print_success "Модель LLaMA 3.1 8B загружена"
+    else
+        print_error "Ошибка загрузки модели LLaMA 3.1 8B"
+        return 1
+    fi
+}
+
 # Проверка Ollama (опционально)
 check_ollama() {
-    print_status "Проверка Ollama (опционально)..."
+    print_status "Проверка Ollama..."
     
     if command -v ollama &> /dev/null; then
         print_success "Ollama найден"
@@ -235,7 +322,15 @@ main() {
     install_dependencies
     create_directories
     create_env_file
-    check_ollama
+    
+    # Установка и настройка Ollama
+    if install_ollama; then
+        if start_ollama; then
+            download_llama_model
+        fi
+    else
+        print_warning "Ollama не установлен. AI-анализ будет недоступен."
+    fi
     
     # Тестирование
     test_installation
@@ -250,8 +345,17 @@ main() {
     echo ""
     echo -e "${YELLOW}Следующие шаги:${NC}"
     echo "1. Отредактируйте файл .env и добавьте ваш TELEGRAM_TOKEN"
-    echo "2. (Опционально) Установите и запустите Ollama для AI-анализа"
-    echo "3. Запустите бота: python3 run_bot.py"
+    echo "2. Запустите бота: python3 run_bot.py"
+    echo ""
+    echo -e "${BLUE}Ollama статус:${NC}"
+    if [ -f "logs/ollama.pid" ]; then
+        echo "• Ollama сервер запущен (PID: $(cat logs/ollama.pid))"
+        echo "• Модель LLaMA 3.1 8B загружена"
+        echo "• AI-анализ доступен"
+    else
+        echo "• Ollama не установлен или не запущен"
+        echo "• AI-анализ недоступен"
+    fi
     echo ""
     echo -e "${BLUE}Дополнительная информация:${NC}"
     echo "• Документация: README.md"

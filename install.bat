@@ -91,20 +91,50 @@ if not exist .env (
     echo [WARNING] Файл .env уже существует, пропускаем создание
 )
 
-REM Проверка Ollama
-echo [INFO] Проверка Ollama (опционально)...
+REM Установка Ollama
+echo [INFO] Установка Ollama...
 ollama --version >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [SUCCESS] Ollama найден
+    echo [SUCCESS] Ollama уже установлен
+) else (
+    echo [INFO] Скачивание и установка Ollama...
+    echo [WARNING] Для Windows нужно скачать Ollama вручную с https://ollama.ai/download
+    echo [WARNING] После установки перезапустите этот скрипт
+    pause
+    exit /b 1
+)
+
+REM Запуск Ollama сервера
+echo [INFO] Запуск Ollama сервера...
+curl -s http://localhost:11434/api/tags >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [SUCCESS] Ollama сервер уже запущен
+) else (
+    echo [INFO] Запуск Ollama сервера в фоне...
+    start /B ollama serve > logs\ollama.log 2>&1
+    echo [INFO] Ожидание запуска сервера...
+    timeout /t 10 /nobreak >nul
     curl -s http://localhost:11434/api/tags >nul 2>&1
     if %errorlevel% equ 0 (
         echo [SUCCESS] Ollama сервер запущен
     ) else (
-        echo [WARNING] Ollama сервер не запущен. Запустите: ollama serve
+        echo [WARNING] Не удалось запустить Ollama сервер
     )
+)
+
+REM Скачивание модели LLaMA
+echo [INFO] Скачивание модели LLaMA 3.1 8B...
+curl -s http://localhost:11434/api/tags | findstr "llama3.1:8b" >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [SUCCESS] Модель LLaMA 3.1 8B уже загружена
 ) else (
-    echo [WARNING] Ollama не найден. AI-анализ будет недоступен.
-    echo [WARNING] Для установки Ollama: https://ollama.ai/download
+    echo [INFO] Скачивание модели (это может занять несколько минут)...
+    ollama pull llama3.1:8b
+    if %errorlevel% equ 0 (
+        echo [SUCCESS] Модель LLaMA 3.1 8B загружена
+    ) else (
+        echo [ERROR] Ошибка загрузки модели LLaMA 3.1 8B
+    )
 )
 
 REM Тест установки
@@ -135,8 +165,18 @@ echo ╚════════════════════════
 echo.
 echo Следующие шаги:
 echo 1. Отредактируйте файл .env и добавьте ваш TELEGRAM_TOKEN
-echo 2. (Опционально) Установите и запустите Ollama для AI-анализа
-echo 3. Запустите бота: python run_bot.py
+echo 2. Запустите бота: python run_bot.py
+echo.
+echo Ollama статус:
+curl -s http://localhost:11434/api/tags >nul 2>&1
+if %errorlevel% equ 0 (
+    echo • Ollama сервер запущен
+    echo • Модель LLaMA 3.1 8B загружена
+    echo • AI-анализ доступен
+) else (
+    echo • Ollama не установлен или не запущен
+    echo • AI-анализ недоступен
+)
 echo.
 echo Дополнительная информация:
 echo • Документация: README.md
