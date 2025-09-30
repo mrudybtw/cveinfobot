@@ -55,6 +55,10 @@ async def handle_help_command(message: types.Message):
 async def handle_stats_command(message: types.Message):
     await command_handler.handle_stats_command(message)
 
+@dp.message(Command("update"))
+async def handle_update_command(message: types.Message):
+    await command_handler.handle_update_command(message)
+
 # Register channel post handler
 @dp.channel_post()
 async def handle_channel_post(message: types.Message):

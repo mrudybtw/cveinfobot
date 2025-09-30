@@ -359,11 +359,15 @@ class CommandHandler:
             
             conn.close()
             
-            # Форматируем дату последнего обновления
+            # Форматируем дату последнего обновления в UTC+3
             if last_update:
                 try:
+                    from datetime import timezone, timedelta
                     last_update_dt = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
-                    last_update_str = last_update_dt.strftime('%d.%m.%Y %H:%M UTC')
+                    # Конвертируем в UTC+3
+                    utc_plus_3 = timezone(timedelta(hours=3))
+                    last_update_dt_utc3 = last_update_dt.astimezone(utc_plus_3)
+                    last_update_str = last_update_dt_utc3.strftime('%d.%m.%Y %H:%M UTC+3')
                 except:
                     last_update_str = last_update
             else:
@@ -414,6 +418,7 @@ class CommandHandler:
 • `/vendor <название>` - Поиск CVE по вендору/продукту
 • `/top` - Топ-5 критических CVE с интерактивными кнопками
 • `/stats` - Статистика базы данных
+• `/update` - Обновить базу данных CVE вручную
 • `/help` - Эта справка
 
 **Автоматические функции:**
@@ -435,3 +440,70 @@ class CommandHandler:
 Бот показывает EPSS (Exploit Prediction Scoring System) оценки для оценки вероятности эксплуатации уязвимостей в реальных атаках.
         """
         await message.answer(help_text, parse_mode="Markdown", disable_web_page_preview=True)
+    
+    async def handle_update_command(self, message: types.Message):
+        """Handle /update command - manually update CVE database"""
+        try:
+            # Отправляем сообщение о начале обновления
+            update_msg = await message.answer("🔄 <b>Обновление базы данных CVE...</b>\n\n<i>Это может занять несколько минут</i>", parse_mode="HTML")
+            
+            # Импортируем функцию обновления
+            from bot.services.collector import update_cve_db
+            
+            # Запускаем обновление
+            await update_cve_db()
+            
+            # Получаем обновленную статистику
+            import sqlite3
+            conn = sqlite3.connect('db/cve.db')
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT COUNT(*) FROM cve")
+            total_cve = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT MAX(published_date) FROM cve")
+            last_update = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT id FROM cve ORDER BY CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC, CAST(SUBSTR(id, 10) AS INTEGER) DESC LIMIT 1")
+            newest_cve = cursor.fetchone()
+            
+            conn.close()
+            
+            # Форматируем дату последнего обновления в UTC+3
+            if last_update:
+                try:
+                    from datetime import datetime, timezone, timedelta
+                    last_update_dt = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
+                    utc_plus_3 = timezone(timedelta(hours=3))
+                    last_update_dt_utc3 = last_update_dt.astimezone(utc_plus_3)
+                    last_update_str = last_update_dt_utc3.strftime('%d.%m.%Y %H:%M UTC+3')
+                except:
+                    last_update_str = last_update
+            else:
+                last_update_str = "Неизвестно"
+            
+            # Обновляем сообщение
+            success_text = f"""✅ <b>База данных CVE обновлена!</b>
+
+📊 <b>Обновленная статистика:</b>
+• Всего CVE: {total_cve:,}
+• Последнее обновление: {last_update_str}
+• Самый новый CVE: {newest_cve[0] if newest_cve else 'Неизвестно'}
+
+<i>Обновление завершено успешно!</i>"""
+            
+            await update_msg.edit_text(success_text, parse_mode="HTML")
+            
+        except Exception as e:
+            logger.error(f"Error updating CVE database: {e}")
+            error_text = f"""❌ <b>Ошибка обновления базы данных</b>
+
+<i>Произошла ошибка при обновлении CVE данных:</i>
+<code>{str(e)}</code>
+
+<i>Попробуйте позже или обратитесь к администратору.</i>"""
+            
+            try:
+                await update_msg.edit_text(error_text, parse_mode="HTML")
+            except:
+                await message.answer(error_text, parse_mode="HTML")
