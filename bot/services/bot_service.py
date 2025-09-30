@@ -76,7 +76,7 @@ class BotService:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, description, cvss_v3, published_date, vendor, product
+                SELECT id, description, cvss_v3, published_date, vendor, product, epss
                 FROM cve 
                 WHERE cvss_v3 IS NOT NULL
                 ORDER BY cvss_v3 DESC, published_date DESC
@@ -91,7 +91,8 @@ class BotService:
                 'cvss_v3': row[2],
                 'published_date': row[3],
                 'vendor': row[4],
-                'product': row[5]
+                'product': row[5],
+                'epss': row[6]
             } for row in rows]
         except Exception as e:
             logger.error(f"Error getting top CVEs: {e}")
@@ -185,10 +186,12 @@ class BotService:
             text = re.sub(r'<[^>]+>', '', text)
             # Clean up extra whitespace
             text = re.sub(r'\s+', ' ', text).strip()
-            # Only escape HTML special characters
-            text = text.replace('&', '&amp;')
+            # Escape HTML special characters in correct order
+            text = text.replace('&', '&amp;')  # Must be first
             text = text.replace('<', '&lt;')
             text = text.replace('>', '&gt;')
+            text = text.replace('"', '&quot;')
+            text = text.replace("'", '&#x27;')
             return text
 
         # Clean and truncate description
@@ -225,10 +228,29 @@ class BotService:
         except:
             formatted_date = published_date
 
+        # EPSS информация
+        epss_score = cve_data.get('epss')
+        epss_text = ""
+        if epss_score is not None:
+            epss_percent = epss_score * 100
+            if epss_score > 0.8:
+                epss_emoji = "⚠️"
+                epss_level = "Очень высокий"
+            elif epss_score > 0.5:
+                epss_emoji = "🚨"
+                epss_level = "Высокий"
+            elif epss_score > 0.2:
+                epss_emoji = "🟡"
+                epss_level = "Средний"
+            else:
+                epss_emoji = "🟢"
+                epss_level = "Низкий"
+            epss_text = f"\n<b>EPSS:</b> {epss_score:.4f} ({epss_percent:.2f}%) {epss_emoji} {epss_level}"
+
         message = f"""{severity_emoji} <b>{cve_id}</b> - {severity_text}
 
 <b>Продукт:</b> {clean_html_text(vendor)} {clean_html_text(product)}
-<b>CVSS v3:</b> {cvss_v3}
+<b>CVSS v3:</b> {cvss_v3}{epss_text}
 <b>Дата:</b> {clean_html_text(formatted_date)}
 
 <b>Описание:</b>
@@ -334,10 +356,44 @@ class BotService:
     async def generate_ai_explanation(self, cve_data: Dict) -> str:
         """Generate AI explanation for CVE"""
         try:
-            return await self.ollama.generate_cve_explanation(cve_data)
+            response = await self.ollama.generate_cve_explanation(cve_data)
+            # Clean the AI response to prevent HTML parsing errors
+            return self._clean_ai_response(response)
         except Exception as e:
             logger.error(f"Error generating AI explanation: {e}")
             return "🤖 AI-анализ временно недоступен."
+    
+    def _clean_ai_response(self, response: str) -> str:
+        """Clean AI response to prevent HTML parsing errors"""
+        if not response:
+            return "🤖 AI-анализ временно недоступен."
+        
+        # Remove any HTML tags
+        import re
+        response = re.sub(r'<[^>]+>', '', response)
+        
+        # Escape HTML special characters
+        response = response.replace('&', '&amp;')
+        response = response.replace('<', '&lt;')
+        response = response.replace('>', '&gt;')
+        response = response.replace('"', '&quot;')
+        response = response.replace("'", '&#x27;')
+        
+        # Remove any remaining problematic characters but keep emojis
+        response = re.sub(r'[^\w\s\.,!?;:()\-\[\]{}@#$%^&*+=|\\/<>~`"\'🔍⚠️🛠️⏰🤖]', '', response)
+        
+        # Check if response is too short
+        if len(response.strip()) < 20:
+            return "🤖 AI-анализ временно недоступен."
+        
+        # Check if response has at least some structure (at least one emoji section)
+        emoji_sections = ['🔍', '⚠️', '🛠️', '⏰']
+        found_sections = sum(1 for section in emoji_sections if section in response)
+        
+        if found_sections == 0:  # If no emoji sections found, use fallback
+            return "🤖 AI-анализ временно недоступен."
+        
+        return response.strip()
     
     def format_vendor_search_results(self, results: List[Dict]) -> str:
         """Format vendor search results for Telegram message"""

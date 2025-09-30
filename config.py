@@ -20,6 +20,10 @@ class Config:
     
     # Logging Configuration
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_DIR = os.getenv("LOG_DIR", "logs")
+    LOG_MAX_SIZE = int(os.getenv("LOG_MAX_SIZE", "10485760"))  # 10MB
+    LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "5"))
+    TIMEZONE = os.getenv("TIMEZONE", "UTC+3")
     
     @classmethod
     def validate(cls):

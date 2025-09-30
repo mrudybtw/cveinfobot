@@ -49,46 +49,76 @@ A comprehensive Telegram bot that provides real-time CVE (Common Vulnerabilities
 ### Prerequisites
 - Python 3.8+
 - Telegram Bot Token (from [@BotFather](https://t.me/botfather))
-- Ollama installed with LLaMA 3.1 8B model
+- Ollama (optional, for AI analysis)
 
-### Installation
+### 🎯 One-Click Installation
+
+#### Linux/macOS
+```bash
+# Clone and install
+git clone https://github.com/mrudybtw/cveinfobot.git
+cd cveinfobot
+chmod +x install.sh
+./install.sh
+```
+
+#### Windows
+```cmd
+# Clone and install
+git clone https://github.com/mrudybtw/cveinfobot.git
+cd cveinfobot
+install.bat
+```
+
+### 📝 Manual Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/cveinfobot.git
+   git clone https://github.com/mrudybtw/cveinfobot.git
    cd cveinfobot
    ```
 
 2. **Install dependencies**
    ```bash
-   python3 setup.py
+   pip install -r requirements.txt
    ```
 
 3. **Configure environment**
    ```bash
-   cp .env.example .env
-   # Edit .env with your Telegram bot token
+   # Create .env file with your configuration
+   echo "TELEGRAM_TOKEN=your_bot_token_here" > .env
+   echo "OLLAMA_BASE_URL=http://localhost:11434" >> .env
+   echo "OLLAMA_MODEL=llama3.1:8b" >> .env
    ```
 
-4. **Initialize database and load CVE data**
-   ```bash
-   python3 load_cve_data.py
-   ```
-
-5. **Start the bot**
+4. **Start the bot** (database initializes automatically)
    ```bash
    python3 run_bot.py
    ```
 
-### Docker Deployment
+### 🔧 Production Deployment
 
+#### Linux Systemd Service
 ```bash
-# Build and run with Docker
-docker build -t cveinfobot .
-docker run -d --name cveinfobot \
-  -e TELEGRAM_BOT_TOKEN=your_token_here \
-  -e OLLAMA_URL=http://host.docker.internal:11434 \
-  cveinfobot
+# Enable and start the service (after running install.sh)
+sudo systemctl enable cveinfobot
+sudo systemctl start cveinfobot
+sudo systemctl status cveinfobot
+
+# View logs
+journalctl -u cveinfobot -f
+```
+
+#### Manual Service Management
+```bash
+# Start bot in background
+nohup python3 run_bot.py > bot.log 2>&1 &
+
+# Stop bot
+pkill -f run_bot.py
+
+# Check if running
+ps aux | grep run_bot.py
 ```
 
 ---
@@ -253,13 +283,26 @@ python3 monitor_progress.py
 cveinfobot/
 ├── bot/
 │   ├── handlers/          # Message handlers
+│   │   ├── command_handler.py    # Bot commands
+│   │   ├── channel_handler.py    # Channel monitoring
+│   │   └── inline_handler.py     # Inline queries
 │   ├── services/          # Core services
+│   │   ├── bot_service.py        # Main bot logic
+│   │   ├── ollama_service.py     # AI analysis
+│   │   └── collector.py          # CVE data collection
+│   ├── utils/             # Utilities
+│   │   └── logging_config.py     # Logging system
 │   └── main.py           # Bot entry point
 ├── db/
-│   └── init_db.py        # Database initialization
-├── config.py             # Configuration
-├── requirements.txt      # Dependencies
-└── README.md            # This file
+│   ├── init_db.py        # Database initialization
+│   └── cve.db           # SQLite database (auto-created)
+├── logs/                 # Log files (auto-created)
+│   ├── bot.log          # Main logs
+│   └── errors.log       # Error logs
+├── config.py            # Configuration
+├── run_bot.py           # Main launcher script
+├── requirements.txt     # Dependencies
+└── README.md           # This file
 ```
 
 ### Adding New Features
