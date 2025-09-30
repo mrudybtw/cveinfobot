@@ -1,4 +1,5 @@
 import logging
+import os
 from aiogram import types
 from aiogram.filters import Command
 from ..services.bot_service import BotService
@@ -8,6 +9,10 @@ logger = logging.getLogger(__name__)
 class CommandHandler:
     def __init__(self, bot_service: BotService):
         self.bot_service = bot_service
+        # Хранилище для отслеживания последних обновлений
+        self.last_manual_update = {}  # user_id -> timestamp
+        self.update_in_progress = set()  # user_id set
+        self.MIN_UPDATE_INTERVAL = 15 * 60  # 15 минут в секундах
     
     async def handle_cve_command(self, message: types.Message):
         """Handle /cve command"""
@@ -441,69 +446,129 @@ class CommandHandler:
         """
         await message.answer(help_text, parse_mode="Markdown", disable_web_page_preview=True)
     
-    async def handle_update_command(self, message: types.Message):
-        """Handle /update command - manually update CVE database"""
+    
+    def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin (bot owner)"""
+        from config import Config
         try:
+            admin_ids = Config.get_admin_ids()
+            # Если не настроены админы, разрешаем всем (для разработки)
+            return user_id in admin_ids if admin_ids else True
+        except:
+            return True  # Fallback - разрешаем всем если ошибка
+    
+    def can_update_now(self, user_id: int) -> tuple[bool, str]:
+        """Check if user can update now and return (can_update, message)"""
+        import time
+        
+        # Проверяем, не идет ли уже обновление
+        if user_id in self.update_in_progress:
+            return False, "⏳ <b>Обновление уже выполняется</b>\n\n<i>Пожалуйста, дождитесь завершения текущего обновления.</i>"
+        
+        # Проверяем интервал времени
+        current_time = time.time()
+        if user_id in self.last_manual_update:
+            time_since_last = current_time - self.last_manual_update[user_id]
+            if time_since_last < self.MIN_UPDATE_INTERVAL:
+                remaining_minutes = int((self.MIN_UPDATE_INTERVAL - time_since_last) / 60)
+                remaining_seconds = int((self.MIN_UPDATE_INTERVAL - time_since_last) % 60)
+                return False, f"⏰ <b>Слишком частые запросы</b>\n\n<i>Следующее обновление доступно через {remaining_minutes}м {remaining_seconds}с</i>"
+        
+        return True, ""
+    
+    async def handle_update_command(self, message: types.Message):
+        """Handle /update command - manually update CVE database with protection"""
+        user_id = message.from_user.id
+        
+        try:
+            # Проверяем права администратора
+            if not self.is_admin(user_id):
+                await message.answer("❌ <b>Доступ запрещен</b>\n\n<i>Эта команда доступна только администраторам.</i>", parse_mode="HTML")
+                return
+            
+            # Проверяем возможность обновления
+            can_update, error_message = self.can_update_now(user_id)
+            if not can_update:
+                await message.answer(error_message, parse_mode="HTML")
+                return
+            
+            # Добавляем пользователя в список обновляющихся
+            self.update_in_progress.add(user_id)
+            
             # Отправляем сообщение о начале обновления
-            update_msg = await message.answer("🔄 <b>Обновление базы данных CVE...</b>\n\n<i>Это может занять несколько минут</i>", parse_mode="HTML")
+            update_msg = await message.answer("🔄 <b>Обновление базы данных CVE...</b>\n\n<i>Это может занять несколько минут</i>\n\n⚠️ <i>Автоматическое обновление продолжает работать в фоне</i>", parse_mode="HTML")
             
-            # Импортируем функцию обновления
-            from bot.services.collector import update_cve_db
-            
-            # Запускаем обновление
-            await update_cve_db()
-            
-            # Получаем обновленную статистику
-            import sqlite3
-            conn = sqlite3.connect('db/cve.db')
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT COUNT(*) FROM cve")
-            total_cve = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT MAX(published_date) FROM cve")
-            last_update = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT id FROM cve ORDER BY CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC, CAST(SUBSTR(id, 10) AS INTEGER) DESC LIMIT 1")
-            newest_cve = cursor.fetchone()
-            
-            conn.close()
-            
-            # Форматируем дату последнего обновления в UTC+3
-            if last_update:
-                try:
-                    from datetime import datetime, timezone, timedelta
-                    last_update_dt = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
-                    utc_plus_3 = timezone(timedelta(hours=3))
-                    last_update_dt_utc3 = last_update_dt.astimezone(utc_plus_3)
-                    last_update_str = last_update_dt_utc3.strftime('%d.%m.%Y %H:%M UTC+3')
-                except:
-                    last_update_str = last_update
-            else:
-                last_update_str = "Неизвестно"
-            
-            # Обновляем сообщение
-            success_text = f"""✅ <b>База данных CVE обновлена!</b>
+            try:
+                # Импортируем функцию обновления
+                from bot.services.collector import update_cve_db
+                
+                # Запускаем обновление
+                await update_cve_db()
+                
+                # Получаем обновленную статистику
+                import sqlite3
+                import time
+                
+                conn = sqlite3.connect('db/cve.db')
+                cursor = conn.cursor()
+                
+                cursor.execute("SELECT COUNT(*) FROM cve")
+                total_cve = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT MAX(published_date) FROM cve")
+                last_update = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT id FROM cve ORDER BY CAST(SUBSTR(id, 5, 4) AS INTEGER) DESC, CAST(SUBSTR(id, 10) AS INTEGER) DESC LIMIT 1")
+                newest_cve = cursor.fetchone()
+                
+                conn.close()
+                
+                # Форматируем дату последнего обновления в UTC+3
+                if last_update:
+                    try:
+                        from datetime import datetime, timezone, timedelta
+                        last_update_dt = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
+                        utc_plus_3 = timezone(timedelta(hours=3))
+                        last_update_dt_utc3 = last_update_dt.astimezone(utc_plus_3)
+                        last_update_str = last_update_dt_utc3.strftime('%d.%m.%Y %H:%M UTC+3')
+                    except:
+                        last_update_str = last_update
+                else:
+                    last_update_str = "Неизвестно"
+                
+                # Обновляем время последнего ручного обновления
+                self.last_manual_update[user_id] = time.time()
+                
+                # Обновляем сообщение
+                success_text = f"""✅ <b>База данных CVE обновлена!</b>
 
 📊 <b>Обновленная статистика:</b>
 • Всего CVE: {total_cve:,}
 • Последнее обновление: {last_update_str}
 • Самый новый CVE: {newest_cve[0] if newest_cve else 'Неизвестно'}
 
+⏰ <b>Следующее ручное обновление:</b> через 15 минут
+🔄 <b>Автоматическое обновление:</b> каждый час
+
 <i>Обновление завершено успешно!</i>"""
-            
-            await update_msg.edit_text(success_text, parse_mode="HTML")
-            
-        except Exception as e:
-            logger.error(f"Error updating CVE database: {e}")
-            error_text = f"""❌ <b>Ошибка обновления базы данных</b>
+                
+                await update_msg.edit_text(success_text, parse_mode="HTML")
+                
+            except Exception as e:
+                logger.error(f"Error updating CVE database: {e}")
+                error_text = f"""❌ <b>Ошибка обновления базы данных</b>
 
 <i>Произошла ошибка при обновлении CVE данных:</i>
 <code>{str(e)}</code>
 
 <i>Попробуйте позже или обратитесь к администратору.</i>"""
-            
-            try:
+                
                 await update_msg.edit_text(error_text, parse_mode="HTML")
-            except:
-                await message.answer(error_text, parse_mode="HTML")
+                
+            finally:
+                # Убираем пользователя из списка обновляющихся
+                self.update_in_progress.discard(user_id)
+            
+        except Exception as e:
+            logger.error(f"Error in handle_update_command: {e}")
+            await message.answer("❌ <b>Внутренняя ошибка</b>\n\n<i>Произошла неожиданная ошибка. Попробуйте позже.</i>", parse_mode="HTML")

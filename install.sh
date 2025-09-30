@@ -109,6 +109,9 @@ TELEGRAM_TOKEN=your_telegram_bot_token_here
 # NVD API Key (опционально, для увеличения лимитов)
 NVD_API_KEY=your_nvd_api_key_here_optional
 
+# Admin User IDs (опционально, через запятую)
+ADMIN_IDS=your_telegram_user_id_here
+
 # ===========================================
 # Настройки приложения (можно оставить по умолчанию)
 # ===========================================

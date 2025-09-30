@@ -68,8 +68,11 @@ if not exist .env (
         echo # Telegram Bot Token (ОБЯЗАТЕЛЬНО)
         echo TELEGRAM_TOKEN=your_telegram_bot_token_here
         echo.
-        echo # NVD API Key (опционально, для увеличения лимитов)
-        echo NVD_API_KEY=your_nvd_api_key_here_optional
+echo # NVD API Key (опционально, для увеличения лимитов)
+echo NVD_API_KEY=your_nvd_api_key_here_optional
+echo.
+echo # Admin User IDs (опционально, через запятую)
+echo ADMIN_IDS=your_telegram_user_id_here
         echo.
         echo # ===========================================
         echo # Настройки приложения (можно оставить по умолчанию)

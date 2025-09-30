@@ -33,6 +33,17 @@ class Config:
         return os.getenv("NVD_API_KEY", "")
     
     @classmethod
+    def get_admin_ids(cls):
+        """Get admin user IDs from environment (optional)"""
+        admin_ids_str = os.getenv("ADMIN_IDS", "")
+        if not admin_ids_str:
+            return []
+        try:
+            return [int(x.strip()) for x in admin_ids_str.split(",") if x.strip()]
+        except ValueError:
+            return []
+    
+    @classmethod
     def validate(cls):
         """Validate required configuration"""
         try:

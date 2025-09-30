@@ -139,6 +139,9 @@ TELEGRAM_TOKEN=your_bot_token_here
 
 # Optional (for higher NVD API limits)
 NVD_API_KEY=your_nvd_api_key_here
+
+# Optional (admin user IDs for /update command)
+ADMIN_IDS=your_telegram_user_id_here
 ```
 
 ### 🔧 Application Settings (config.py)
@@ -161,6 +164,12 @@ OLLAMA_MODEL = "llama3.1:8b"
 - **`.env`** - Sensitive data (tokens, API keys)
 - **`config.py`** - Application settings with defaults
 - **Environment variables** - Override defaults when needed
+
+### 🔒 Security Features
+- **Admin-only commands** - `/update` command restricted to administrators
+- **Rate limiting** - Manual updates limited to once every 15 minutes
+- **Automatic updates** - Background CVE updates every hour (unaffected by manual updates)
+- **User isolation** - Each user has independent update limits
 
 ---
 
@@ -416,6 +425,8 @@ This project is licensed under the BEER-WARE LICENSE - see the [LICENSE](LICENSE
 - `/cve <CVE-ID>` - Получить детальную информацию об уязвимости
 - `/vendor <название>` - Поиск уязвимостей по вендору/продукту
 - `/top` - Показать самые критичные недавние CVE
+- `/stats` - Статистика базы данных CVE
+- `/update` - Обновить базу данных CVE вручную (только для админов)
 - `/help` - Показать доступные команды
 - `@cveinfobot <запрос>` - Инлайн-поиск в любом чате
 
