@@ -8,15 +8,13 @@ class Config:
     DB_PATH = os.getenv("DB_PATH", "db/cve.db")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_DIR = os.getenv("LOG_DIR", "logs")
-    LOG_MAX_SIZE = int(os.getenv("LOG_MAX_SIZE", "10485760"))  # 10MB
-    LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "5"))
-    TIMEZONE = os.getenv("TIMEZONE", "UTC+3")
     
     # API Endpoints (non-sensitive)
     NVD_API_URL = os.getenv("NVD_API_URL", "https://services.nvd.nist.gov/rest/json/cves/2.0")
-    NVD_UPDATE_INTERVAL = int(os.getenv("NVD_UPDATE_INTERVAL", "3600"))
+    NVD_UPDATE_INTERVAL = int(os.getenv("NVD_UPDATE_INTERVAL", "3600"))  # 1 час
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+    EPSS_API_URL = os.getenv("EPSS_API_URL", "https://api.first.org/data/v1/epss")
     
     # Sensitive data (from .env only)
     @classmethod

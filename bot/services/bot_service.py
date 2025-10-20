@@ -1,3 +1,4 @@
+import asyncio
 import sqlite3
 import re
 import logging
@@ -9,7 +10,8 @@ logger = logging.getLogger(__name__)
 class BotService:
     def __init__(self, db_path: str = "db/cve.db"):
         self.db_path = db_path
-        self.ollama = OllamaService()
+        from config import Config
+        self.ollama = OllamaService(base_url=Config.OLLAMA_BASE_URL)
     
     def find_cve_patterns(self, text: str) -> List[str]:
         """Find all CVE patterns in text"""
@@ -168,7 +170,7 @@ class BotService:
         return message
 
     def format_cve_message(self, cve_data: Dict, include_ai: bool = True, loading_animation: str = None) -> str:
-        """Format CVE information for Telegram message"""
+        """Format CVE information for Telegram message using Markdown"""
         cve_id = cve_data.get('id', 'Unknown')
         description = cve_data.get('description', 'No description available')
         cvss_v3 = cve_data.get('cvss_v3', 'N/A')
@@ -176,22 +178,17 @@ class BotService:
         product = cve_data.get('product', 'Unknown')
         published_date = cve_data.get('published_date', 'Unknown')
 
-        # Clean text for HTML - remove HTML tags and escape special characters
-        def clean_html_text(text):
+        # Clean text for Markdown - minimal escaping
+        def clean_markdown_text(text):
             if not text:
                 return text
             text = str(text)
-            # Remove HTML tags
-            import re
-            text = re.sub(r'<[^>]+>', '', text)
-            # Clean up extra whitespace
-            text = re.sub(r'\s+', ' ', text).strip()
-            # Escape HTML special characters in correct order
-            text = text.replace('&', '&amp;')  # Must be first
-            text = text.replace('<', '&lt;')
-            text = text.replace('>', '&gt;')
-            text = text.replace('"', '&quot;')
-            text = text.replace("'", '&#x27;')
+            # Only escape the most problematic characters
+            text = text.replace('\\', '\\\\')  # Escape backslashes first
+            text = text.replace('_', '\\_')    # Escape underscores
+            text = text.replace('*', '\\*')    # Escape asterisks
+            text = text.replace('[', '\\[')    # Escape brackets
+            text = text.replace(']', '\\]')    # Escape brackets
             return text
 
         # Clean and truncate description
@@ -245,26 +242,27 @@ class BotService:
             else:
                 epss_emoji = "🟢"
                 epss_level = "Низкий"
-            epss_text = f"\n<b>EPSS:</b> {epss_score:.4f} ({epss_percent:.2f}%) {epss_emoji} {epss_level}"
+            epss_text = f"\n**EPSS:** {epss_score:.4f} ({epss_percent:.2f}%) {epss_emoji} {epss_level}"
 
-        message = f"""{severity_emoji} <b>{cve_id}</b> - {severity_text}
+        # Создаем сообщение
+        message = f"""{severity_emoji} **{cve_id}** - {severity_text}
 
-<b>Продукт:</b> {clean_html_text(vendor)} {clean_html_text(product)}
-<b>CVSS v3:</b> {cvss_v3}{epss_text}
-<b>Дата:</b> {clean_html_text(formatted_date)}
+**Продукт:** {clean_markdown_text(vendor)} {clean_markdown_text(product)}
+**CVSS v3:** {cvss_v3}{epss_text}
+**Дата:** {clean_markdown_text(formatted_date)}
 
-<b>Описание:</b>
-{clean_html_text(clean_description)}
+**Описание:**
+{clean_markdown_text(clean_description)}
 
-<b>Ссылки:</b>
-• <a href="https://nvd.nist.gov/vuln/detail/{cve_id}">NVD</a>
-• <a href="https://www.cvedetails.com/cve/{cve_id}/">CVE Details</a>"""
+**Ссылки:**
+• [NVD](https://nvd.nist.gov/vuln/detail/{cve_id})
+• [CVE Details](https://www.cvedetails.com/cve/{cve_id}/)"""
 
         if include_ai:
             if loading_animation:
-                message += f"\n\n🤖 <b>AI-анализ:</b>\n{loading_animation}"
+                message += f"\n\n🤖 **AI-анализ:**\n{loading_animation}"
             else:
-                message += "\n\n🤖 <b>AI-анализ:</b>\n<i>Генерация объяснения...</i>"
+                message += "\n\n🤖 **AI-анализ:**\n_Генерация объяснения..._"
 
         return message
     
@@ -356,31 +354,38 @@ class BotService:
     async def generate_ai_explanation(self, cve_data: Dict) -> str:
         """Generate AI explanation for CVE"""
         try:
+            logger.info(f"Generating AI explanation for {cve_data.get('id', 'Unknown')}")
             response = await self.ollama.generate_cve_explanation(cve_data)
             # Clean the AI response to prevent HTML parsing errors
-            return self._clean_ai_response(response)
+            cleaned_response = self._clean_ai_response(response)
+            logger.info(f"AI explanation generated successfully for {cve_data.get('id', 'Unknown')}")
+            return cleaned_response
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout generating AI explanation for {cve_data.get('id', 'Unknown')}")
+            return "🤖 AI-анализ временно недоступен (таймаут)."
         except Exception as e:
-            logger.error(f"Error generating AI explanation: {e}")
+            logger.error(f"Error generating AI explanation for {cve_data.get('id', 'Unknown')}: {e}")
             return "🤖 AI-анализ временно недоступен."
     
     def _clean_ai_response(self, response: str) -> str:
-        """Clean AI response to prevent HTML parsing errors"""
+        """Clean AI response and format for Markdown display"""
         if not response:
             return "🤖 AI-анализ временно недоступен."
         
-        # Remove any HTML tags
+        # Remove any existing HTML tags
         import re
         response = re.sub(r'<[^>]+>', '', response)
         
-        # Escape HTML special characters
-        response = response.replace('&', '&amp;')
-        response = response.replace('<', '&lt;')
-        response = response.replace('>', '&gt;')
-        response = response.replace('"', '&quot;')
-        response = response.replace("'", '&#x27;')
+        # Escape Markdown special characters
+        response = response.replace('\\', '\\\\')  # Escape backslashes first
+        response = response.replace('_', '\\_')    # Escape underscores
+        response = response.replace('*', '\\*')    # Escape asterisks
+        response = response.replace('[', '\\[')    # Escape brackets
+        response = response.replace(']', '\\]')    # Escape brackets
+        response = response.replace('`', '\\`')    # Escape backticks
         
-        # Remove any remaining problematic characters but keep emojis
-        response = re.sub(r'[^\w\s\.,!?;:()\-\[\]{}@#$%^&*+=|\\/<>~`"\'🔍⚠️🛠️⏰🤖]', '', response)
+        # Remove any remaining problematic characters but keep emojis and newlines
+        response = re.sub(r'[^\w\s\.,!?;:()\-\[\]{}@#$%^&*+=|\\/<>~`"\'🔍⚠️🛠️⏰🤖\n]', '', response)
         
         # Check if response is too short
         if len(response.strip()) < 20:
@@ -393,7 +398,19 @@ class BotService:
         if found_sections == 0:  # If no emoji sections found, use fallback
             return "🤖 AI-анализ временно недоступен."
         
-        return response.strip()
+        # Format for HTML display with proper line breaks
+        # Split by double newlines to get sections
+        sections = response.strip().split('\n\n')
+        formatted_sections = []
+        
+        for section in sections:
+            section = section.strip()
+            if section:
+                # Add \n\n for proper spacing in Telegram HTML
+                formatted_sections.append(section)
+        
+        # Join sections with \n\n\n for better spacing
+        return '\n\n\n'.join(formatted_sections)
     
     def format_vendor_search_results(self, results: List[Dict]) -> str:
         """Format vendor search results for Telegram message"""

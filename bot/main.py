@@ -88,29 +88,64 @@ async def handle_callback_query(callback: CallbackQuery):
             if cve_data:
                 # Send detailed CVE information
                 initial_message = bot_service.format_cve_message(cve_data, include_ai=False)
-                loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
+                loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 _Анализирую уязвимость..._")
                 
                 # Answer callback query
                 await callback.answer()
                 
                 # Send detailed message
-                sent_message = await callback.message.answer(loading_message, parse_mode="HTML", disable_web_page_preview=True)
+                sent_message = await callback.message.answer(loading_message, parse_mode="Markdown", disable_web_page_preview=True)
                 
                 # Generate AI explanation and edit the message
                 try:
+                    logger.info(f"Starting AI explanation generation for {cve_id}")
                     ai_explanation = await bot_service.generate_ai_explanation(cve_data)
+                    logger.info(f"AI explanation generated successfully for {cve_id}")
+                    logger.info(f"Raw AI explanation length: {len(ai_explanation) if ai_explanation else 0}")
+                    logger.info(f"Raw AI explanation preview: {ai_explanation[:200] if ai_explanation else 'None'}")
                     
                     # Create updated message with AI analysis
-                    updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
+                    # Clean AI explanation for HTML
+                    def clean_ai_text(text):
+                        if not text:
+                            logger.warning("AI explanation is empty or None")
+                            return text
+                        text = str(text)
+                        logger.info(f"Before cleaning - text length: {len(text)}")
+                        
+                        # Remove any HTML tags that might still be present
+                        import re
+                        text = re.sub(r'<[^>]+>', '', text)
+                        
+                        # Clean up extra whitespace but preserve paragraph breaks
+                        text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces/tabs to single space
+                        text = re.sub(r'\n[ \t]+', '\n', text)  # Remove leading spaces from lines
+                        text = re.sub(r'[ \t]+\n', '\n', text)  # Remove trailing spaces from lines
+                        text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 consecutive newlines
+                        text = text.strip()
+                        
+                        logger.info(f"After cleaning - text length: {len(text)}")
+                        logger.info(f"Cleaned text preview: {text[:200]}")
+                        return text
+                    
+                    clean_ai_explanation = clean_ai_text(ai_explanation)
+                    logger.info(f"Clean AI explanation length: {len(clean_ai_explanation) if clean_ai_explanation else 0}")
+                    
+                    updated_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n\n{clean_ai_explanation}"
+                    logger.info(f"Created updated message for {cve_id}, length: {len(updated_message)}")
                     
                     # Edit the original message
-                    await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
+                    logger.info(f"Editing message for {cve_id}")
+                    await sent_message.edit_text(updated_message, parse_mode="Markdown", disable_web_page_preview=True)
+                    logger.info(f"Message edited successfully for {cve_id}")
                     
                 except Exception as e:
-                    logger.error(f"Error generating AI explanation for {cve_id}: {e}")
+                    logger.error(f"Error in AI explanation process for {cve_id}: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
                     # Edit message to show AI error
-                    error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
-                    await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
+                    error_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n_Временно недоступен_"
+                    await sent_message.edit_text(error_message, parse_mode="Markdown", disable_web_page_preview=True)
             else:
                 await callback.answer("❌ CVE не найден в базе данных.", show_alert=True)
         elif callback.data == "top_more":
@@ -120,7 +155,7 @@ async def handle_callback_query(callback: CallbackQuery):
             results = bot_service.get_top_critical_cves(limit=10)
             
             if len(results) > 5:
-                response = "🔴 <b>Дополнительные критические CVE (6-10):</b>\n\n"
+                response = "🔴 **Дополнительные критические CVE (6-10):**\n\n"
                 
                 # Создаем кнопки для дополнительных CVE
                 keyboard_buttons = []
@@ -198,8 +233,8 @@ async def handle_callback_query(callback: CallbackQuery):
                     if not product:
                         product = 'Unknown'
                     
-                    response += f"{i}. {severity_emoji} <b>{cve['id']}</b> (CVSS: {cvss}){epss_text}\n"
-                    response += f"   <i>{vendor} {product}</i>\n"
+                    response += f"{i}. {severity_emoji} **{cve['id']}** (CVSS: {cvss}){epss_text}\n"
+                    response += f"   _{vendor} {product}_\n"
                     response += f"   {description}\n\n"
                 
                 # Создаем кнопки в удобном формате (по 2 в ряду для 6-10)
@@ -228,7 +263,7 @@ async def handle_callback_query(callback: CallbackQuery):
                 keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
                 
                 await callback.answer()
-                await callback.message.answer(response, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard)
+                await callback.message.answer(response, parse_mode="Markdown", disable_web_page_preview=True, reply_markup=keyboard)
             else:
                 await callback.answer("❌ Больше CVE не найдено.", show_alert=True)
         else:
@@ -258,24 +293,24 @@ async def handle_message(message: types.Message):
                 if cve_data:
                     # Send initial CVE information + loading indicator as reply
                     initial_message = bot_service.format_cve_message(cve_data, include_ai=False)
-                    loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
-                    sent_message = await message.reply(loading_message, parse_mode="HTML", disable_web_page_preview=True)
+                    loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 _Анализирую уязвимость..._")
+                    sent_message = await message.reply(loading_message, parse_mode="Markdown", disable_web_page_preview=True)
                     
                     # Generate AI explanation and edit the message
                     try:
                         ai_explanation = await bot_service.generate_ai_explanation(cve_data)
                         
                         # Create updated message with AI analysis
-                        updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
+                        updated_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n\n{ai_explanation}"
                         
                         # Edit the original message
-                        await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
+                        await sent_message.edit_text(updated_message, parse_mode="Markdown", disable_web_page_preview=True)
                         
                     except Exception as e:
                         logger.error(f"Error generating AI explanation for {cve_id}: {e}")
                         # Edit message to show AI error
-                        error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
-                        await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
+                        error_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n_Временно недоступен_"
+                        await sent_message.edit_text(error_message, parse_mode="Markdown", disable_web_page_preview=True)
                 else:
                     await message.reply(f"❌ CVE {cve_id} не найден в базе данных.", disable_web_page_preview=True)
         else:

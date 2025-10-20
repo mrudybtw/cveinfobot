@@ -63,14 +63,14 @@ class ChannelHandler:
             if cve_data:
                 # Send initial CVE information + loading indicator
                 initial_message = self.bot_service.format_cve_message(cve_data, include_ai=False)
-                loading_message = self.bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
+                loading_message = self.bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 _Анализирую уязвимость..._")
                 
                 # Send comment to discussion group using message_thread_id for proper commenting
                 try:
                     sent_message = await message.bot.send_message(
                         chat_id=discussion_group_id,
                         text=loading_message,
-                        parse_mode="HTML",
+                        parse_mode="Markdown",
                         disable_web_page_preview=True,
                         message_thread_id=message.message_thread_id if hasattr(message, 'message_thread_id') and message.message_thread_id else None
                     )
@@ -80,7 +80,7 @@ class ChannelHandler:
                     sent_message = await message.bot.send_message(
                         chat_id=discussion_group_id,
                         text=loading_message,
-                        parse_mode="HTML",
+                        parse_mode="Markdown",
                         disable_web_page_preview=True,
                         reply_to_message_id=message.message_id
                     )
@@ -90,16 +90,36 @@ class ChannelHandler:
                     ai_explanation = await self.bot_service.generate_ai_explanation(cve_data)
                     
                     # Create updated message with AI analysis
-                    updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
+                    # Clean AI explanation for HTML
+                    def clean_ai_text(text):
+                        if not text:
+                            return text
+                        text = str(text)
+                        
+                        # Remove any HTML tags that might still be present
+                        import re
+                        text = re.sub(r'<[^>]+>', '', text)
+                        
+                        # Clean up extra whitespace but preserve paragraph breaks
+                        text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces/tabs to single space
+                        text = re.sub(r'\n[ \t]+', '\n', text)  # Remove leading spaces from lines
+                        text = re.sub(r'[ \t]+\n', '\n', text)  # Remove trailing spaces from lines
+                        text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 consecutive newlines
+                        text = text.strip()
+                        
+                        return text
+                    
+                    clean_ai_explanation = clean_ai_text(ai_explanation)
+                    updated_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n\n{clean_ai_explanation}"
                     
                     # Edit the original message
-                    await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
+                    await sent_message.edit_text(updated_message, parse_mode="Markdown", disable_web_page_preview=True)
                     
                 except Exception as e:
                     logger.error(f"Error generating AI explanation for {cve_id}: {e}")
                     # Edit message to show AI error
-                    error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
-                    await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
+                    error_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n_Временно недоступен_"
+                    await sent_message.edit_text(error_message, parse_mode="Markdown", disable_web_page_preview=True)
             else:
                 # Send error comment to discussion group
                 try:
@@ -129,23 +149,43 @@ class ChannelHandler:
             if cve_data:
                 # Send initial CVE information + loading indicator
                 initial_message = self.bot_service.format_cve_message(cve_data, include_ai=False)
-                loading_message = self.bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
-                sent_message = await message.reply(loading_message, parse_mode="HTML", disable_web_page_preview=True)
+                loading_message = self.bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 _Анализирую уязвимость..._")
+                sent_message = await message.reply(loading_message, parse_mode="Markdown", disable_web_page_preview=True)
                 
                 # Generate AI explanation and edit the message
                 try:
                     ai_explanation = await self.bot_service.generate_ai_explanation(cve_data)
                     
                     # Create updated message with AI analysis
-                    updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
+                    # Clean AI explanation for HTML
+                    def clean_ai_text(text):
+                        if not text:
+                            return text
+                        text = str(text)
+                        
+                        # Remove any HTML tags that might still be present
+                        import re
+                        text = re.sub(r'<[^>]+>', '', text)
+                        
+                        # Clean up extra whitespace but preserve paragraph breaks
+                        text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces/tabs to single space
+                        text = re.sub(r'\n[ \t]+', '\n', text)  # Remove leading spaces from lines
+                        text = re.sub(r'[ \t]+\n', '\n', text)  # Remove trailing spaces from lines
+                        text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 consecutive newlines
+                        text = text.strip()
+                        
+                        return text
+                    
+                    clean_ai_explanation = clean_ai_text(ai_explanation)
+                    updated_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n\n{clean_ai_explanation}"
                     
                     # Edit the original message
-                    await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
+                    await sent_message.edit_text(updated_message, parse_mode="Markdown", disable_web_page_preview=True)
                     
                 except Exception as e:
                     logger.error(f"Error generating AI explanation for {cve_id}: {e}")
                     # Edit message to show AI error
-                    error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
-                    await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
+                    error_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n_Временно недоступен_"
+                    await sent_message.edit_text(error_message, parse_mode="Markdown", disable_web_page_preview=True)
             else:
                 await message.reply(f"❌ CVE {cve_id} не найден в базе данных.", disable_web_page_preview=True)
