@@ -1,25 +1,21 @@
 import asyncio
-import os
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import InlineQuery
-from dotenv import load_dotenv
-from bot.services.collector import update_all_periodically
+from aiogram.types import InlineQuery, CallbackQuery
 from bot.services.bot_service import BotService
 from bot.handlers.command_handler import CommandHandler
 from bot.handlers.channel_handler import ChannelHandler
 from bot.handlers.inline_handler import InlineHandler
+from bot.utils.logging_config import get_logger
+from config import Config
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Получаем логгер
+logger = get_logger(__name__)
 
-load_dotenv()
-API_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Валидируем конфигурацию
+Config.validate()
+API_TOKEN = Config.get_telegram_token()
 
 if not API_TOKEN:
     logger.error("TELEGRAM_TOKEN not found in environment variables")
@@ -55,6 +51,14 @@ async def handle_top_command(message: types.Message):
 async def handle_help_command(message: types.Message):
     await command_handler.handle_help_command(message)
 
+@dp.message(Command("stats"))
+async def handle_stats_command(message: types.Message):
+    await command_handler.handle_stats_command(message)
+
+@dp.message(Command("update"))
+async def handle_update_command(message: types.Message):
+    await command_handler.handle_update_command(message)
+
 # Register channel post handler
 @dp.channel_post()
 async def handle_channel_post(message: types.Message):
@@ -69,6 +73,205 @@ async def handle_channel_message(message: types.Message):
 @dp.inline_query()
 async def handle_inline_query(query: InlineQuery):
     await inline_handler.handle_inline_query(query)
+
+# Register callback query handler
+@dp.callback_query()
+async def handle_callback_query(callback: CallbackQuery):
+    """Handle callback queries from inline keyboards"""
+    try:
+        if callback.data.startswith("cve_detail_"):
+            cve_id = callback.data.replace("cve_detail_", "")
+            
+            # Get CVE data
+            cve_data = bot_service.get_cve_info(cve_id)
+            
+            if cve_data:
+                # Send detailed CVE information
+                initial_message = bot_service.format_cve_message(cve_data, include_ai=False)
+                loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 _Анализирую уязвимость..._")
+                
+                # Answer callback query
+                await callback.answer()
+                
+                # Send detailed message
+                sent_message = await callback.message.answer(loading_message, parse_mode="Markdown", disable_web_page_preview=True)
+                
+                # Generate AI explanation and edit the message
+                try:
+                    logger.info(f"Starting AI explanation generation for {cve_id}")
+                    ai_explanation = await bot_service.generate_ai_explanation(cve_data)
+                    logger.info(f"AI explanation generated successfully for {cve_id}")
+                    logger.info(f"Raw AI explanation length: {len(ai_explanation) if ai_explanation else 0}")
+                    logger.info(f"Raw AI explanation preview: {ai_explanation[:200] if ai_explanation else 'None'}")
+                    
+                    # Create updated message with AI analysis
+                    # Clean AI explanation for HTML
+                    def clean_ai_text(text):
+                        if not text:
+                            logger.warning("AI explanation is empty or None")
+                            return text
+                        text = str(text)
+                        logger.info(f"Before cleaning - text length: {len(text)}")
+                        
+                        # Remove any HTML tags that might still be present
+                        import re
+                        text = re.sub(r'<[^>]+>', '', text)
+                        
+                        # Clean up extra whitespace but preserve paragraph breaks
+                        text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces/tabs to single space
+                        text = re.sub(r'\n[ \t]+', '\n', text)  # Remove leading spaces from lines
+                        text = re.sub(r'[ \t]+\n', '\n', text)  # Remove trailing spaces from lines
+                        text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 consecutive newlines
+                        text = text.strip()
+                        
+                        logger.info(f"After cleaning - text length: {len(text)}")
+                        logger.info(f"Cleaned text preview: {text[:200]}")
+                        return text
+                    
+                    clean_ai_explanation = clean_ai_text(ai_explanation)
+                    logger.info(f"Clean AI explanation length: {len(clean_ai_explanation) if clean_ai_explanation else 0}")
+                    
+                    updated_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n\n{clean_ai_explanation}"
+                    logger.info(f"Created updated message for {cve_id}, length: {len(updated_message)}")
+                    
+                    # Edit the original message
+                    logger.info(f"Editing message for {cve_id}")
+                    await sent_message.edit_text(updated_message, parse_mode="Markdown", disable_web_page_preview=True)
+                    logger.info(f"Message edited successfully for {cve_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Error in AI explanation process for {cve_id}: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    # Edit message to show AI error
+                    error_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n_Временно недоступен_"
+                    await sent_message.edit_text(error_message, parse_mode="Markdown", disable_web_page_preview=True)
+            else:
+                await callback.answer("❌ CVE не найден в базе данных.", show_alert=True)
+        elif callback.data == "top_more":
+            # Show additional 5 CVEs with buttons
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            results = bot_service.get_top_critical_cves(limit=10)
+            
+            if len(results) > 5:
+                response = "🔴 **Дополнительные критические CVE (6-10):**\n\n"
+                
+                # Создаем кнопки для дополнительных CVE
+                keyboard_buttons = []
+                
+                for i, cve in enumerate(results[5:10], 6):
+                    cvss = cve.get('cvss_v3', 'N/A')
+                    epss = cve.get('epss')
+                    
+                    if cvss and cvss >= 9.0:
+                        severity_emoji = "🔴"
+                    elif cvss and cvss >= 7.0:
+                        severity_emoji = "🟠"
+                    else:
+                        severity_emoji = "🟡"
+                    
+                    epss_text = ""
+                    if epss is not None:
+                        if epss > 0.8:
+                            epss_emoji = "⚠️"
+                        elif epss > 0.5:
+                            epss_emoji = "🚨"
+                        elif epss > 0.2:
+                            epss_emoji = "🟡"
+                        else:
+                            epss_emoji = "🟢"
+                        epss_text = f" {epss_emoji}"
+                    
+                    description = cve.get('description', 'No description')
+                    if len(description) > 50:
+                        description = description[:50] + "..."
+                    
+                    vendor = cve.get('vendor', '').strip()
+                    product = cve.get('product', '').strip()
+                    
+                    # Если вендор/продукт отсутствуют, пытаемся извлечь из описания
+                    if not vendor or not product:
+                        # Ищем паттерны в описании для извлечения вендора/продукта
+                        desc = cve.get('description', '')
+                        if 'DOXENSE' in desc:
+                            vendor = 'DOXENSE'
+                            product = 'WATCHDOC'
+                        elif 'HaruTheme' in desc:
+                            vendor = 'HaruTheme'
+                            product = 'WooCommerce Designer Pro'
+                        elif 'TalentSys' in desc:
+                            vendor = 'TalentSys'
+                            product = 'Consulting Information Technology'
+                        elif 'flowiseai' in desc or 'Flowise' in desc:
+                            vendor = 'flowiseai'
+                            product = 'flowise'
+                        elif 'Delta Electronics' in desc:
+                            vendor = 'Delta Electronics'
+                            product = 'DIALink'
+                        elif 'Spring Cloud' in desc:
+                            vendor = 'Spring'
+                            product = 'Cloud Gateway'
+                        elif 'Digiever' in desc:
+                            vendor = 'Digiever'
+                            product = 'NVR'
+                        else:
+                            # Пытаемся извлечь первое значимое слово из описания как вендор
+                            words = desc.split()
+                            if words:
+                                # Пропускаем служебные слова
+                                skip_words = ['A', 'An', 'The', 'In', 'Unrestricted', 'Improper', 'Certain', 'Directory', 'Authorization']
+                                for word in words:
+                                    if word not in skip_words and len(word) > 2:
+                                        vendor = word
+                                        product = 'Unknown'
+                                        break
+                    
+                    # Если все еще пустые, используем Unknown
+                    if not vendor:
+                        vendor = 'Unknown'
+                    if not product:
+                        product = 'Unknown'
+                    
+                    response += f"{i}. {severity_emoji} **{cve['id']}** (CVSS: {cvss}){epss_text}\n"
+                    response += f"   _{vendor} {product}_\n"
+                    response += f"   {description}\n\n"
+                
+                # Создаем кнопки в удобном формате (по 2 в ряду для 6-10)
+                for i in range(6, 11):
+                    if i % 2 == 0:  # Четные номера - начало нового ряда
+                        if i == 10:  # Последняя кнопка - отдельно
+                            keyboard_buttons.append([
+                                InlineKeyboardButton(
+                                    text=f"{i}",
+                                    callback_data=f"cve_detail_{results[i-1]['id']}"
+                                )
+                            ])
+                        else:  # Первая кнопка в ряду
+                            keyboard_buttons.append([
+                                InlineKeyboardButton(
+                                    text=f"{i}",
+                                    callback_data=f"cve_detail_{results[i-1]['id']}"
+                                ),
+                                InlineKeyboardButton(
+                                    text=f"{i+1}",
+                                    callback_data=f"cve_detail_{results[i]['id']}"
+                                )
+                            ])
+                
+                # Создаем клавиатуру
+                keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+                
+                await callback.answer()
+                await callback.message.answer(response, parse_mode="Markdown", disable_web_page_preview=True, reply_markup=keyboard)
+            else:
+                await callback.answer("❌ Больше CVE не найдено.", show_alert=True)
+        else:
+            await callback.answer("❌ Неизвестная команда.", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"Error handling callback query: {e}")
+        await callback.answer("❌ Ошибка при обработке запроса.", show_alert=True)
 
 # Register message handler for non-command messages
 @dp.message()
@@ -90,24 +293,24 @@ async def handle_message(message: types.Message):
                 if cve_data:
                     # Send initial CVE information + loading indicator as reply
                     initial_message = bot_service.format_cve_message(cve_data, include_ai=False)
-                    loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 <i>Анализирую уязвимость...</i>")
-                    sent_message = await message.reply(loading_message, parse_mode="HTML", disable_web_page_preview=True)
+                    loading_message = bot_service.format_cve_message(cve_data, include_ai=True, loading_animation="🔄 _Анализирую уязвимость..._")
+                    sent_message = await message.reply(loading_message, parse_mode="Markdown", disable_web_page_preview=True)
                     
                     # Generate AI explanation and edit the message
                     try:
                         ai_explanation = await bot_service.generate_ai_explanation(cve_data)
                         
                         # Create updated message with AI analysis
-                        updated_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n\n{ai_explanation}"
+                        updated_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n\n{ai_explanation}"
                         
                         # Edit the original message
-                        await sent_message.edit_text(updated_message, parse_mode="HTML", disable_web_page_preview=True)
+                        await sent_message.edit_text(updated_message, parse_mode="Markdown", disable_web_page_preview=True)
                         
                     except Exception as e:
                         logger.error(f"Error generating AI explanation for {cve_id}: {e}")
                         # Edit message to show AI error
-                        error_message = f"{initial_message}\n\n🤖 <b>AI-анализ:</b>\n<i>Временно недоступен</i>"
-                        await sent_message.edit_text(error_message, parse_mode="HTML", disable_web_page_preview=True)
+                        error_message = f"{initial_message}\n\n🤖 **AI-анализ:**\n_Временно недоступен_"
+                        await sent_message.edit_text(error_message, parse_mode="Markdown", disable_web_page_preview=True)
                 else:
                     await message.reply(f"❌ CVE {cve_id} не найден в базе данных.", disable_web_page_preview=True)
         else:
@@ -119,7 +322,9 @@ async def handle_message(message: types.Message):
                 "• /help - Справка\n"
                 "• /cve CVE-YYYY-NNNNN - Информация о CVE\n"
                 "• /vendor <название> - Поиск по вендору\n"
-                "• /top - Топ критических CVE\n\n"
+                "• /top - Топ критических CVE\n"
+                "• /stats - Статистика базы данных\n\n"
+                "Бот показывает CVSS и EPSS оценки для оценки рисков.\n\n"
                 "Или просто напишите CVE ID в сообщении!",
                 parse_mode="Markdown",
                 disable_web_page_preview=True
@@ -130,15 +335,6 @@ async def handle_message(message: types.Message):
 
 async def main():
     try:
-        # Initialize database
-        from db.init_db import init_db
-        init_db()
-        logger.info("Database initialized")
-        
-        # Start CVE collector
-        asyncio.create_task(update_all_periodically(interval_seconds=3600))
-        logger.info("CVE collector started")
-        
         # Start bot
         logger.info("CVE Bot starting...")
         await dp.start_polling(bot)

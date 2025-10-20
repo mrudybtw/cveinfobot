@@ -16,6 +16,14 @@ def init_db(db_path: str = "db/cve.db"):
             epss REAL
         )
     """)
+    
+    # Создаем таблицу метаданных
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS db_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
 
     conn.commit()
     conn.close()
